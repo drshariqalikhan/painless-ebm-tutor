@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painless EBM - Socratic AI Clinical Appraisal Tutor</title>
+  
+  <!-- Bulma CSS & FontAwesome -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Custom Styling -->
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0a0e17">
+
+  <!-- PDF.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- Supabase JS from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- TOP NAV BAR -->
+  <nav class="navbar is-dark is-fixed-top" role="navigation">
+    <div class="navbar-brand">
+      <div class="navbar-item">
+        <i class="fa-solid fa-graduation-cap has-text-info mr-2"></i>
+        <strong class="has-text-white">Painless EBM Tutor</strong>
+      </div>
+    </div>
+    <div class="navbar-menu">
+      <div class="navbar-start">
+        <div class="navbar-item">
+          <span id="active-paper-badge" class="tag is-info is-light">No paper selected</span>
+        </div>
+      </div>
+      <div class="navbar-end mr-3">
+        <div class="navbar-item">
+          <button id="btn-open-library" class="button is-small is-info mr-2">
+            <i class="fa-solid fa-book-medical mr-1"></i> Practice Library
+          </button>
+          <label class="button is-small is-dark mr-2">
+            <i class="fa-solid fa-upload mr-1"></i> Upload PDF
+            <input type="file" id="pdf-file-input" accept="application/pdf" style="display: none;">
+          </label>
+          <span id="user-badge" class="tag is-rounded is-dark">Checking access...</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MOBILE TAB SELECTOR (Hidden on Desktop) -->
+  <div class="tabs is-toggle is-fullwidth is-small is-hidden-tablet mb-0" id="mobile-tabs">
+    <ul>
+      <li id="tab-btn-pdf" class="is-active"><a onclick="app.switchMobileView('pdf')"><i class="fa-solid fa-file-pdf mr-1"></i> Paper</a></li>
+      <li id="tab-btn-chat">
+        <a onclick="app.switchMobileView('chat')">
+          <i class="fa-solid fa-comments mr-1"></i> AI Tutor 
+          <span id="mobile-chat-badge" class="tag is-info is-rounded ml-1 is-hidden">1</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+
+  <!-- MAIN SPLIT SCREEN CONTAINER -->
+  <div class="main-split-container">
+    
+    <!-- LEFT PANE: PDF.js VIEWER -->
+    <section class="split-pane pdf-pane" id="pdf-pane">
+      <div class="pdf-toolbar level is-mobile px-3 py-2">
+        <div class="level-left">
+          <button class="button is-small is-dark" id="pdf-prev"><i class="fa-solid fa-arrow-left"></i></button>
+          <span class="has-text-grey-light mx-2" style="font-size: 0.85rem;">
+            Page <span id="pdf-page-num" class="has-text-white">1</span> / <span id="pdf-page-count">-</span>
+          </span>
+          <button class="button is-small is-dark" id="pdf-next"><i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+        <div class="level-right">
+          <button class="button is-small is-dark" id="pdf-zoom-out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+          <button class="button is-small is-dark" id="pdf-zoom-in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+        </div>
+      </div>
+      
+      <div class="pdf-canvas-wrapper" id="pdf-canvas-wrapper">
+        <div id="pdf-loading-overlay" class="has-text-centered py-6">
+          <i class="fa-solid fa-book-open fa-spin fa-2x has-text-info"></i>
+          <p class="mt-3 has-text-grey-light">Choose a paper from the library or upload a PDF to begin.</p>
+        </div>
+        <div id="pdf-page-container">
+          <canvas id="pdf-canvas"></canvas>
+          <div id="pdf-text-layer" class="textLayer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANE: SOCRATIC CHAT INTERFACE -->
+    <section class="split-pane chat-pane" id="chat-pane">
+      
+      <!-- STEP PROGRESS INDICATOR -->
+      <div class="chat-header px-4 py-3">
+        <div class="level is-mobile mb-1">
+          <div class="level-left">
+            <span class="tag is-primary is-light is-small" id="step-badge">Step 0 / 7</span>
+          </div>
+          <div class="level-right">
+            <span class="is-size-7 has-text-grey-light" id="step-title">Study Design & Directness</span>
+          </div>
+        </div>
+        <progress class="progress is-info is-small" id="checklist-progress" value="0" max="7"></progress>
+      </div>
+
+      <!-- MESSAGES FEED -->
+      <div class="chat-messages px-4 py-3" id="chat-messages">
+        <!-- Messages will be injected dynamically -->
+      </div>
+
+      <!-- BOTTOM INTERACTION BAR -->
+      <div class="chat-input-bar p-3">
+        <!-- Quick Action Pills -->
+        <div class="quick-pills mb-2" id="quick-pills">
+          <button class="button is-small is-rounded is-dark" onclick="app.selectPill('Adequate / Low Risk')">🛡️ Adequate</button>
+          <button class="button is-small is-rounded is-dark" onclick="app.selectPill('Inadequate / High Risk')">⚠️ Inadequate</button>
+          <button class="button is-small is-rounded is-dark" onclick="app.selectPill('Unclear / Not Stated')">❓ Unclear</button>
+          <button class="button is-small is-rounded is-dark" onclick="app.selectPill('Give me a hint')">💡 Hint</button>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form id="chat-form" onsubmit="app.handleStudentSubmit(event)">
+          <div class="field has-addons">
+            <div class="control is-expanded">
+              <input type="text" id="chat-input" class="input is-dark" placeholder="State your evaluation and justification..." autocomplete="off">
+            </div>
+            <div class="control">
+              <button type="submit" id="btn-send" class="button is-info">
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- MODAL: GATED ACCESS CODE (Study Contamination Control) -->
+  <div class="modal is-active" id="modal-access">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+      <header class="modal-card-head has-background-dark">
+        <p class="modal-card-title has-text-white is-size-5">
+          <i class="fa-solid fa-user-lock has-text-info mr-2"></i>Participant Access
+        </p>
+      </header>
+      <section class="modal-card-body has-background-black-bis has-text-white">
+        <p class="mb-3 is-size-6">Please enter your assigned study participant code to begin:</p>
+        <div class="field">
+          <div class="control has-icons-left">
+            <input type="text" id="input-access-code" class="input is-info" placeholder="e.g. STUDENT-A01" autofocus>
+            <span class="icon is-small is-left">
+              <i class="fa-solid fa-key"></i>
+            </span>
+          </div>
+        </div>
+        <p id="access-error" class="has-text-danger is-size-7 is-hidden mb-2"></p>
+        <p class="is-size-7 has-text-grey">
+          * Note: Access is locked to one device to maintain trial protocol integrity.
+        </p>
+      </section>
+      <footer class="modal-card-foot has-background-dark">
+        <button class="button is-info" onclick="app.submitAccessCode()">Verify Access</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- MODAL: PRACTICE LIBRARY PICKER -->
+  <div class="modal" id="modal-library">
+    <div class="modal-background" onclick="app.closeLibraryModal()"></div>
+    <div class="modal-card" style="width: 90%; max-width: 800px;">
+      <header class="modal-card-head has-background-dark">
+        <p class="modal-card-title has-text-white is-size-5">
+          <i class="fa-solid fa-book-medical has-text-info mr-2"></i>Practice Landmark Papers
+        </p>
+        <button class="delete" aria-label="close" onclick="app.closeLibraryModal()"></button>
+      </header>
+      <section class="modal-card-body has-background-black-bis">
+        <!-- Specialty Filters -->
+        <div class="buttons mb-4">
+          <button class="button is-small is-info filter-btn is-active" onclick="app.filterLibrary('all')">All Specialties</button>
+          <button class="button is-small is-dark filter-btn" onclick="app.filterLibrary('critical_care')">Critical Care</button>
+          <button class="button is-small is-dark filter-btn" onclick="app.filterLibrary('medicine')">Medicine</button>
+          <button class="button is-small is-dark filter-btn" onclick="app.filterLibrary('surgery')">Surgery</button>
+          <button class="button is-small is-dark filter-btn" onclick="app.filterLibrary('anaesthesia')">Anaesthesia</button>
+        </div>
+        <div id="library-list" class="columns is-multiline">
+          <!-- Populated from Supabase database -->
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- MODAL: FINAL EBM SCORECARD & BADGE -->
+  <div class="modal" id="modal-scorecard">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+      <header class="modal-card-head has-background-dark">
+        <p class="modal-card-title has-text-white is-size-5">
+          <i class="fa-solid fa-award has-text-warning mr-2"></i>EBM Appraisal Competency
+        </p>
+      </header>
+      <section class="modal-card-body has-background-black-bis has-text-centered py-5">
+        <div class="badge-icon mb-3">
+          <i class="fa-solid fa-shield-halved fa-4x has-text-warning"></i>
+        </div>
+        <h3 class="title is-4 has-text-white mb-1" id="badge-title">Methodology Detective</h3>
+        <p class="subtitle is-6 has-text-info mb-4">Level 2 Clinical Appraiser</p>
+        
+        <div class="box has-background-dark has-text-left p-4 mb-4">
+          <p class="is-size-6 has-text-white"><strong>Tutor's Debrief:</strong></p>
+          <p class="is-size-7 has-text-grey-light mt-1" id="badge-feedback">
+            You successfully navigated the 8 validity questions of Painless EBM. You excelled at separating sequence generation from allocation concealment.
+          </p>
+        </div>
+        <button class="button is-info" onclick="location.reload()">Appraise Another Paper</button>
+      </section>
+    </div>
+  </div>
+
+  <!-- Core Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/pdf-viewer.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    // PWA Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+    }
+  </script>
+</body>
+</html>

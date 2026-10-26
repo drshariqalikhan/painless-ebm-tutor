@@ -1,0 +1,170 @@
+:root {
+  --bg-dark: #0a0e17;
+  --surface-dark: #131b26;
+  --surface-header: #1d283a;
+  --accent-blue: #00a3e0;
+  --accent-purple: #b57edc;
+}
+
+body, html {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+/* Navbar */
+.navbar {
+  background-color: var(--surface-dark) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Split screen layout */
+.main-split-container {
+  display: flex;
+  height: calc(100vh - 3.25rem);
+  margin-top: 3.25rem;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.split-pane {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdf-pane {
+  flex: 1.2;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #1a1e29;
+}
+
+.chat-pane {
+  flex: 0.9;
+  background-color: var(--surface-dark);
+}
+
+/* PDF Viewer controls & canvas */
+.pdf-toolbar {
+  background-color: var(--surface-header);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pdf-canvas-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 15px;
+}
+
+#pdf-page-container {
+  position: relative;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+#pdf-canvas {
+  display: block;
+}
+
+/* Text layer for selection and highlighting */
+.textLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.25;
+  line-height: 1.0;
+}
+
+.textLayer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.textLayer .highlight {
+  background-color: yellow !important;
+  opacity: 0.6;
+  border-radius: 2px;
+}
+
+/* Chat container */
+.chat-header {
+  background-color: var(--surface-header);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Chat bubbles */
+.chat-bubble {
+  max-width: 88%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.chat-bubble.tutor {
+  align-self: flex-start;
+  background-color: #1a2536;
+  color: #e2e8f0;
+  border-left: 3px solid var(--accent-blue);
+}
+
+.chat-bubble.student {
+  align-self: flex-end;
+  background-color: #005a87;
+  color: #ffffff;
+}
+
+/* Evidence callout in chat */
+.evidence-card {
+  background-color: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 163, 224, 0.4);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.chat-input-bar {
+  background-color: var(--surface-header);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.quick-pills {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+/* Responsive mobile view */
+@media screen and (max-width: 768px) {
+  .main-split-container {
+    height: calc(100vh - 5.5rem);
+    margin-top: 5.5rem;
+  }
+  .split-pane {
+    flex: 1;
+    width: 100vw;
+  }
+  .pdf-pane.is-hidden-mobile, .chat-pane.is-hidden-mobile {
+    display: none !important;
+  }
+}
