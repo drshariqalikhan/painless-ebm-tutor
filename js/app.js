@@ -1,11 +1,11 @@
 class EbmTutorApp {
   constructor() {
-    this.participant = null;
     this.deviceId = this.getOrCreateDeviceId();
     this.currentSession = null;
     this.activeStep = 0;
     this.libraryPapers = [];
     this.selectedPill = null;
+    this.activeModel = 'Gemini 3.5 Flash-Lite';
 
     this.init();
   }
@@ -19,60 +19,40 @@ class EbmTutorApp {
     return id;
   }
 
-async init() {
-    // 1. Load credentials dynamically from /api/config
+  async init() {
     await initAppConfig();
+    await this.loadPracticeLibrary();
 
-    // 2. Check saved participant token
-    const savedCode = localStorage.getItem('ebm_participant_code');
-    if (savedCode) {
-      document.getElementById('input-access-code').value = savedCode;
-      await this.submitAccessCode();
+    // Bind local PDF file upload
+    const fileInput = document.getElementById('pdf-file-input');
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => this.handleCustomFileUpload(e));
     }
   }
 
-  // 1. Participant Access Verification
-  async submitAccessCode() {
-    const code = document.getElementById('input-access-code').value.trim();
-    const errEl = document.getElementById('access-error');
-    if (!code) return;
-
-    try {
-      const { data, error } = await supabaseClient.functions.invoke(CONFIG.EDGE_FUNCTION_NAME, {
-        body: { action: 'verify_access', participant_code: code, device_id: this.deviceId }
-      });
-
-      if (error || !data.success) {
-        errEl.textContent = data?.error || 'Verification failed.';
-        errEl.classList.remove('is-hidden');
-        return;
-      }
-
-      this.participant = data.participant;
-      localStorage.setItem('ebm_participant_code', code);
-      document.getElementById('modal-access').classList.remove('is-active');
-      document.getElementById('user-badge').textContent = `Group ${this.participant.group_assignment} (${code})`;
-
-      await this.loadPracticeLibrary();
-    } catch (err) {
-      errEl.textContent = 'Server error verifying access token.';
-      errEl.classList.remove('is-hidden');
-    }
-  }
-
-  // 2. Practice Library & Filtering
+  // 1. Practice Library Handling
   async loadPracticeLibrary() {
-    const { data } = await supabaseClient.from('practice_library').select('*');
-    this.libraryPapers = data || [];
-    this.renderLibrary(this.libraryPapers);
-    document.getElementById('btn-open-library').addEventListener('click', () => {
-      document.getElementById('modal-library').classList.add('is-active');
-    });
+    try {
+      const { data, error } = await supabaseClient.from('practice_library').select('*');
+      this.libraryPapers = data || [];
+      this.renderLibrary(this.libraryPapers);
+
+      const btnOpen = document.getElementById('btn-open-library');
+      if (btnOpen) {
+        btnOpen.addEventListener('click', () => {
+          document.getElementById('modal-library').classList.add('is-active');
+        });
+      }
+    } catch (e) {
+      console.warn('Could not load library from Supabase:', e);
+    }
   }
 
   filterLibrary(specialty) {
     document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('is-active', 'is-info'));
-    event.target.classList.add('is-active', 'is-info');
+    if (window.event && window.event.target) {
+      window.event.target.classList.add('is-active', 'is-info');
+    }
 
     if (specialty === 'all') {
       this.renderLibrary(this.libraryPapers);
@@ -84,6 +64,13 @@ async init() {
 
   renderLibrary(papers) {
     const list = document.getElementById('library-list');
+    if (!list) return;
+
+    if (papers.length === 0) {
+      list.innerHTML = `<div class="column is-12 has-text-centered has-text-grey py-5">No papers currently in this section. Upload your own PDF to start.</div>`;
+      return;
+    }
+
     list.innerHTML = papers.map(p => `
       <div class="column is-6">
         <div class="box has-background-dark p-4">
@@ -91,7 +78,9 @@ async init() {
           <span class="tag is-dark is-small mb-1">${p.difficulty}</span>
           <h4 class="has-text-white is-size-6 has-text-weight-bold mb-1">${p.title}</h4>
           <p class="has-text-grey is-size-7 mb-2">${p.citation}</p>
-          <p class="has-text-warning is-size-7 mb-3"><i class="fa-solid fa-bullseye mr-1"></i>Focus: ${p.pedagogical_focus}</p>
+          <p class="has-text-warning is-size-7 mb-3">
+            <i class="fa-solid fa-bullseye mr-1"></i>Focus: ${p.pedagogical_focus}
+          </p>
           <button class="button is-small is-info is-fullwidth" onclick="app.startPaperAppraisal('${p.id}')">
             Appraise This Paper
           </button>
@@ -104,7 +93,7 @@ async init() {
     document.getElementById('modal-library').classList.remove('is-active');
   }
 
-  // 3. Start Socratic Appraisal Session
+  // 2. Start Appraisal on a Library Paper
   async startPaperAppraisal(paperId) {
     const paper = this.libraryPapers.find(p => p.id === paperId);
     if (!paper) return;
@@ -112,36 +101,92 @@ async init() {
     this.closeLibraryModal();
     document.getElementById('active-paper-badge').textContent = paper.title;
 
-    // Get public URL of PDF from Supabase storage
+    // Get public URL from Supabase Storage
     const { data } = supabaseClient.storage.from('study-papers').getPublicUrl(paper.pdf_storage_path);
     await pdfViewer.loadPDF(data.publicUrl);
 
-    // Call Edge Function to create session
-    const { data: res } = await supabaseClient.functions.invoke(CONFIG.EDGE_FUNCTION_NAME, {
-      body: {
-        action: 'start_session',
-        participant_id: this.participant.id,
-        paper_id: paper.id,
-        paper_title: paper.title
+    await this.initSessionOnBackend(paper.id, null, paper.title);
+  }
+
+  // 3. User Uploads Their Own PDF
+  async handleCustomFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file || file.type !== 'application/pdf') {
+      alert('Please select a valid PDF file.');
+      return;
+    }
+
+    const title = file.name.replace(/\.pdf$/i, '');
+    document.getElementById('active-paper-badge').textContent = title;
+
+    // Render local file directly in PDF.js via object URL
+    const fileUrl = URL.createObjectURL(file);
+    await pdfViewer.loadPDF(fileUrl);
+
+    await this.initSessionOnBackend(null, null, title);
+  }
+
+  // Backend Session Initializer
+  async initSessionOnBackend(paperId, customPdfUrl, title) {
+    const btn = document.getElementById('btn-send');
+    if (btn) btn.classList.add('is-loading');
+
+    try {
+      const { data: res } = await supabaseClient.functions.invoke(CONFIG.EDGE_FUNCTION_NAME, {
+        body: {
+          action: 'start_session',
+          participant_id: null, // Tester/Dev mode
+          paper_id: paperId,
+          custom_pdf_url: customPdfUrl,
+          paper_title: title
+        }
+      });
+
+      if (res && res.session) {
+        this.currentSession = res.session;
+        this.activeStep = 0;
+        this.updateChecklistUI(0, 'Study Design & Directness');
+
+        if (res.model_used) {
+          this.activeModel = res.model_used;
+        }
+
+        const messagesDiv = document.getElementById('chat-messages');
+        messagesDiv.innerHTML = '';
+        this.addMessageToChat('tutor', res.opening_message, null, this.activeModel);
       }
-    });
-
-    if (res && res.session) {
-      this.currentSession = res.session;
-      this.activeStep = 0;
-      this.updateChecklistUI(0, 'Study Design & Directness');
-
-      const messagesDiv = document.getElementById('chat-messages');
-      messagesDiv.innerHTML = '';
-      this.addMessageToChat('tutor', res.opening_message);
+    } catch (err) {
+      console.error('Error starting session:', err);
+    } finally {
+      if (btn) btn.classList.remove('is-loading');
     }
   }
 
-  // 4. Chat Management & Socratic Dialogue
-  addMessageToChat(sender, text, evidence = null) {
+  // 4. Chat Bubble Rendering with Active Model Stamping
+  addMessageToChat(sender, text, evidence = null, modelUsed = null) {
     const messagesDiv = document.getElementById('chat-messages');
     const bubble = document.createElement('div');
     bubble.className = `chat-bubble ${sender}`;
+
+    let headerHtml = '';
+    if (sender === 'tutor') {
+      const displayModel = modelUsed || this.activeModel || 'Gemini 3.5 Flash-Lite';
+      
+      // Update the global header badge
+      const modelLabelEl = document.getElementById('active-model-name');
+      if (modelLabelEl) modelLabelEl.textContent = displayModel;
+
+      headerHtml = `
+        <div class="is-flex is-justify-content-space-between is-align-items-center mb-1">
+          <span class="is-size-7 has-text-weight-bold has-text-info">
+            <i class="fa-solid fa-user-doctor mr-1"></i>AI Attending Tutor
+          </span>
+          <span class="tag is-black is-rounded" style="font-size: 0.65rem; opacity: 0.85;">
+            <i class="fa-solid fa-microchip mr-1"></i>${displayModel}
+          </span>
+        </div>
+      `;
+    }
 
     let evidenceHtml = '';
     if (evidence && evidence.quote) {
@@ -158,7 +203,7 @@ async init() {
       `;
     }
 
-    bubble.innerHTML = `<div>${text.replace(/\n/g, '<br>')}</div>${evidenceHtml}`;
+    bubble.innerHTML = `${headerHtml}<div>${text.replace(/\n/g, '<br>')}</div>${evidenceHtml}`;
     messagesDiv.appendChild(bubble);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   }
@@ -196,7 +241,11 @@ async init() {
       btn.classList.remove('is-loading');
 
       if (data && data.tutor_response) {
-        this.addMessageToChat('tutor', data.tutor_response, data.evidence);
+        if (data.model_used) {
+          this.activeModel = data.model_used;
+        }
+
+        this.addMessageToChat('tutor', data.tutor_response, data.evidence, data.model_used);
         this.updateChecklistUI(data.current_step);
 
         if (data.is_completed) {
