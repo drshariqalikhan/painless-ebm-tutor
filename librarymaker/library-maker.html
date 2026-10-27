@@ -18,6 +18,7 @@
       --surface-dark: #131b26;
       --surface-header: #1d283a;
       --accent-blue: #00a3e0;
+      --accent-purple: #b57edc;
     }
     body, html {
       background-color: var(--bg-dark);
@@ -28,7 +29,6 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     
-    /* Global Bulma Overrides for Dark Mode */
     .box, .modal-card-body, .input, .textarea, .select select {
       background-color: var(--surface-dark);
       color: white;
@@ -37,7 +37,6 @@
     .input::placeholder, .textarea::placeholder { color: rgba(255,255,255,0.3); }
     .title, .subtitle, .label { color: white !important; }
     
-    /* Layouts */
     #view-setup { height: 100vh; overflow-y: auto; padding: 40px 20px; }
     #view-workspace { display: none; height: 100vh; flex-direction: column; }
     
@@ -46,24 +45,29 @@
     .left-pane { flex: 1; border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; background: #1a1e29; }
     .right-pane { flex: 1; overflow-y: auto; padding: 20px; background-color: var(--bg-dark); }
     
-    /* PDF Viewer */
     .pdf-toolbar { background-color: var(--surface-header); padding: 10px; display: flex; justify-content: space-between; align-items: center; }
     .pdf-canvas-wrapper { flex: 1; overflow: auto; position: relative; padding: 20px; display: flex; justify-content: center; align-items: flex-start; }
-    #pdf-page-container { position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+    
+    #pdf-page-container { position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.6); display: inline-block; }
     #pdf-canvas { display: block; }
     
-    /* Text Layer for Selection */
+    /* Text Layer */
     .textLayer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; opacity: 0.2; line-height: 1.0; }
     .textLayer span { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
     ::selection { background: rgba(0, 163, 224, 0.5); color: transparent; }
 
-    /* Floating Action Button (Option B) */
+    /* Area Selection Overlay (For Figures/Tables) */
+    #area-overlay {
+      position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+      z-index: 50; cursor: crosshair; display: none;
+    }
+    .selection-box {
+      position: absolute; border: 2px dashed #b57edc; background-color: rgba(181, 126, 220, 0.2); pointer-events: none;
+    }
+
+    /* Floating Action Button */
     #floating-highlighter {
-      position: absolute;
-      display: none;
-      z-index: 1000;
-      transform: translate(-50%, -100%);
-      margin-top: -10px;
+      position: absolute; display: none; z-index: 1000; transform: translate(-50%, -100%); margin-top: -10px;
     }
 
     /* Accordion Cards */
@@ -71,6 +75,8 @@
     .step-card.is-targeted { border: 2px solid var(--accent-blue); box-shadow: 0 0 15px rgba(0, 163, 224, 0.2); }
     .step-header { background-color: var(--surface-header); padding: 12px 16px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
     .step-body { padding: 16px; }
+    
+    .coord-badge { font-family: monospace; font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; color: #a0aec0; }
   </style>
 </head>
 <body>
@@ -81,7 +87,7 @@
       <div class="has-text-centered mb-5">
         <i class="fa-solid fa-microscope fa-3x has-text-info mb-3"></i>
         <h1 class="title">Practice Library Maker</h1>
-        <p class="subtitle is-6 has-text-grey">Generate expert-annotated clinical papers for the Painless EBM Knowledgebase.</p>
+        <p class="subtitle is-6 has-text-grey">Generate expert-annotated clinical papers for the EBM Knowledgebase.</p>
       </div>
 
       <div class="box">
@@ -161,7 +167,6 @@
 
   <!-- ==================== PHASE 2: SPLIT-SCREEN WORKSPACE ==================== -->
   <div id="view-workspace">
-    <!-- Navbar -->
     <nav class="navbar is-dark px-4 py-2">
       <div class="navbar-brand is-align-items-center">
         <i class="fa-solid fa-vial has-text-info mr-2"></i>
@@ -185,6 +190,17 @@
             <span class="mx-2 is-size-7">Page <span id="page-num">1</span> / <span id="page-count">-</span></span>
             <button class="button is-small is-dark" onclick="maker.changePage(1)"><i class="fa-solid fa-arrow-right"></i></button>
           </div>
+          
+          <!-- SELECTION MODE TOGGLES -->
+          <div class="buttons has-addons is-centered mb-0">
+            <button id="btn-mode-text" class="button is-small is-info is-selected" onclick="maker.setSelectionMode('text')">
+              <i class="fa-solid fa-i-cursor mr-1"></i> Text Selection
+            </button>
+            <button id="btn-mode-area" class="button is-small" onclick="maker.setSelectionMode('area')">
+              <i class="fa-solid fa-crop-simple mr-1"></i> Area (Figures)
+            </button>
+          </div>
+
           <div>
             <button class="button is-small is-dark" onclick="maker.zoom(-0.2)"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
             <button class="button is-small is-dark" onclick="maker.zoom(0.2)"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
@@ -195,9 +211,10 @@
           <div id="pdf-page-container">
             <canvas id="pdf-canvas"></canvas>
             <div id="pdf-text-layer" class="textLayer"></div>
+            <!-- Interactive overlay for drawing boxes over figures -->
+            <div id="area-overlay"></div> 
           </div>
           
-          <!-- OPTION B: THE FLOATING HIGHLIGHTER BUTTON -->
           <button id="floating-highlighter" class="button is-info is-small is-rounded shadow" onclick="maker.captureEvidence()">
             <i class="fa-solid fa-thumbtack mr-1"></i> Send to Active Step
           </button>
@@ -206,7 +223,7 @@
 
       <!-- RIGHT PANE: ACCORDION FORMS -->
       <div class="right-pane" id="forms-pane">
-        <!-- Dynamically populated by maker.js -->
+        <!-- Dynamically populated -->
       </div>
     </div>
   </div>
@@ -220,42 +237,83 @@
         this.pdfDoc = null;
         this.pageNum = 1;
         this.scale = 1.3;
+        
         this.canvas = document.getElementById('pdf-canvas');
         this.ctx = this.canvas.getContext('2d');
         this.textLayerDiv = document.getElementById('pdf-text-layer');
+        this.areaOverlay = document.getElementById('area-overlay');
         this.wrapper = document.getElementById('pdf-canvas-wrapper');
+        this.pageContainer = document.getElementById('pdf-page-container');
         this.floatingBtn = document.getElementById('floating-highlighter');
         
         this.activeStepIndex = null;
-        this.selectedText = "";
+        this.selectionMode = 'text'; // 'text' or 'area'
+        this.pendingCapture = null;  // Holds exact coordinate data before sending to form
         
-        this.appState = {
-          metadata: {},
-          steps: []
-        };
+        // Marquee drawing state
+        this.isDrawing = false;
+        this.startX = 0;
+        this.startY = 0;
+        this.currentBox = null;
 
-        this.bindTextSelection();
+        this.appState = { metadata: {}, steps: [] };
+
+        this.bindEvents();
       }
 
-      // --- TEXT SELECTION & FLOATING BUTTON (OPTION B) ---
-      bindTextSelection() {
-        this.wrapper.addEventListener('mouseup', (e) => {
-          // Wait a tiny bit for double-click selections to resolve
+      setSelectionMode(mode) {
+        this.selectionMode = mode;
+        const btnText = document.getElementById('btn-mode-text');
+        const btnArea = document.getElementById('btn-mode-area');
+        
+        if (mode === 'text') {
+          btnText.classList.replace('is-dark', 'is-info');
+          btnText.classList.add('is-selected');
+          btnArea.classList.remove('is-info', 'is-selected');
+          
+          this.textLayerDiv.style.pointerEvents = 'auto';
+          this.areaOverlay.style.display = 'none';
+        } else {
+          btnArea.classList.add('is-info', 'is-selected');
+          btnText.classList.remove('is-info', 'is-selected');
+          
+          this.textLayerDiv.style.pointerEvents = 'none';
+          this.areaOverlay.style.display = 'block';
+          window.getSelection().removeAllRanges();
+          this.floatingBtn.style.display = 'none';
+        }
+      }
+
+      bindEvents() {
+        // --- 1. TEXT SELECTION EVENT ---
+        this.textLayerDiv.addEventListener('mouseup', () => {
+          if (this.selectionMode !== 'text') return;
           setTimeout(() => {
             const selection = window.getSelection();
             const text = selection.toString().trim();
             
-            if (text.length > 0) {
-              this.selectedText = text.replace(/\s+/g, ' '); // Clean line breaks
+            if (text.length > 0 && selection.rangeCount > 0) {
               const range = selection.getRangeAt(0);
               const rect = range.getBoundingClientRect();
+              const containerRect = this.pageContainer.getBoundingClientRect();
+              
+              // Calculate EXACT relative percentage coordinates
+              const box = {
+                top: ((rect.top - containerRect.top) / containerRect.height * 100).toFixed(2),
+                left: ((rect.left - containerRect.left) / containerRect.width * 100).toFixed(2),
+                width: (rect.width / containerRect.width * 100).toFixed(2),
+                height: (rect.height / containerRect.height * 100).toFixed(2)
+              };
+
+              this.pendingCapture = { type: 'text', text: text.replace(/\s+/g, ' '), box: box, page: this.pageNum };
+              
+              // Position button
               const wrapperRect = this.wrapper.getBoundingClientRect();
+              const btnTop = rect.top - wrapperRect.top + this.wrapper.scrollTop - 40;
+              const btnLeft = rect.left - wrapperRect.left + this.wrapper.scrollLeft + (rect.width / 2);
               
-              const top = rect.top - wrapperRect.top + this.wrapper.scrollTop - 40;
-              const left = rect.left - wrapperRect.left + this.wrapper.scrollLeft + (rect.width / 2);
-              
-              this.floatingBtn.style.top = `${top}px`;
-              this.floatingBtn.style.left = `${left}px`;
+              this.floatingBtn.style.top = `${btnTop}px`;
+              this.floatingBtn.style.left = `${btnLeft}px`;
               this.floatingBtn.style.display = 'block';
             } else {
               this.floatingBtn.style.display = 'none';
@@ -263,12 +321,72 @@
           }, 100);
         });
 
-        // Hide button on scroll or mousedown elsewhere
-        this.wrapper.addEventListener('scroll', () => { this.floatingBtn.style.display = 'none'; });
-        this.wrapper.addEventListener('mousedown', (e) => {
-          if (e.target.id !== 'floating-highlighter') {
-            this.floatingBtn.style.display = 'none';
+        // --- 2. AREA SELECTION EVENTS (FIGURES & TABLES) ---
+        this.areaOverlay.addEventListener('mousedown', (e) => {
+          if (this.selectionMode !== 'area') return;
+          this.isDrawing = true;
+          this.floatingBtn.style.display = 'none';
+          
+          // Clear previous box
+          if (this.currentBox) this.currentBox.remove();
+          
+          this.startX = e.offsetX;
+          this.startY = e.offsetY;
+          
+          this.currentBox = document.createElement('div');
+          this.currentBox.className = 'selection-box';
+          this.currentBox.style.left = `${this.startX}px`;
+          this.currentBox.style.top = `${this.startY}px`;
+          this.areaOverlay.appendChild(this.currentBox);
+        });
+
+        this.areaOverlay.addEventListener('mousemove', (e) => {
+          if (!this.isDrawing || !this.currentBox) return;
+          const currentX = e.offsetX;
+          const currentY = e.offsetY;
+          
+          const width = Math.abs(currentX - this.startX);
+          const height = Math.abs(currentY - this.startY);
+          const left = Math.min(currentX, this.startX);
+          const top = Math.min(currentY, this.startY);
+          
+          this.currentBox.style.width = `${width}px`;
+          this.currentBox.style.height = `${height}px`;
+          this.currentBox.style.left = `${left}px`;
+          this.currentBox.style.top = `${top}px`;
+        });
+
+        this.areaOverlay.addEventListener('mouseup', (e) => {
+          if (!this.isDrawing) return;
+          this.isDrawing = false;
+          
+          const boxRect = this.currentBox.getBoundingClientRect();
+          const containerRect = this.pageContainer.getBoundingClientRect();
+          
+          // Prevent accidental clicks (box too small)
+          if (boxRect.width < 20 || boxRect.height < 20) {
+            this.currentBox.remove();
+            return;
           }
+
+          // Calculate relative percentage coordinates
+          const box = {
+            top: ((boxRect.top - containerRect.top) / containerRect.height * 100).toFixed(2),
+            left: ((boxRect.left - containerRect.left) / containerRect.width * 100).toFixed(2),
+            width: (boxRect.width / containerRect.width * 100).toFixed(2),
+            height: (boxRect.height / containerRect.height * 100).toFixed(2)
+          };
+
+          this.pendingCapture = { type: 'figure', text: '[ Figure / Table Selected ]', box: box, page: this.pageNum };
+
+          // Position button
+          const wrapperRect = this.wrapper.getBoundingClientRect();
+          const btnTop = boxRect.top - wrapperRect.top + this.wrapper.scrollTop - 40;
+          const btnLeft = boxRect.left - wrapperRect.left + this.wrapper.scrollLeft + (boxRect.width / 2);
+          
+          this.floatingBtn.style.top = `${btnTop}px`;
+          this.floatingBtn.style.left = `${btnLeft}px`;
+          this.floatingBtn.style.display = 'block';
         });
       }
 
@@ -279,16 +397,30 @@
           return;
         }
 
-        // Auto-fill the active step's evidence inputs
-        document.getElementById(`quote_${this.activeStepIndex}`).value = this.selectedText;
-        document.getElementById(`page_${this.activeStepIndex}`).value = this.pageNum;
+        const data = this.pendingCapture;
+        if (!data) return;
+
+        // Auto-fill the active step's inputs
+        document.getElementById(`quote_${this.activeStepIndex}`).value = data.text;
+        document.getElementById(`page_${this.activeStepIndex}`).value = data.page;
         
-        // Visual confirmation
+        // Save the precise bounding box JSON to a hidden dataset attribute on the card
+        const card = document.getElementById(`card_${this.activeStepIndex}`);
+        card.dataset.evidenceType = data.type;
+        card.dataset.boundingBox = JSON.stringify(data.box);
+        
+        // Update the visual coordinate badge
+        const badge = document.getElementById(`coord_badge_${this.activeStepIndex}`);
+        badge.innerHTML = `<i class="fa-solid ${data.type === 'figure' ? 'fa-crop-simple' : 'fa-align-left'}"></i> Captured at [ X: ${data.box.left}%, Y: ${data.box.top}% ]`;
+        if (data.type === 'figure') badge.style.color = '#b57edc';
+        else badge.style.color = '#00a3e0';
+        
         this.floatingBtn.style.display = 'none';
         window.getSelection().removeAllRanges();
+        if (this.currentBox) { this.currentBox.remove(); this.currentBox = null; }
       }
 
-      // --- PDF.js CONTROLS ---
+      // --- PDF.js RENDERING ---
       async loadPDF(file) {
         const fileUrl = URL.createObjectURL(file);
         this.pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;
@@ -306,10 +438,11 @@
         const renderContext = { canvasContext: this.ctx, viewport: viewport };
         await page.render(renderContext).promise;
 
-        // Render Text Layer for Selection
         this.textLayerDiv.innerHTML = '';
         this.textLayerDiv.style.height = `${viewport.height}px`;
         this.textLayerDiv.style.width = `${viewport.width}px`;
+        this.areaOverlay.style.height = `${viewport.height}px`;
+        this.areaOverlay.style.width = `${viewport.width}px`;
 
         const textContent = await page.getTextContent();
         pdfjsLib.renderTextLayer({
@@ -320,6 +453,7 @@
         });
 
         document.getElementById('page-num').textContent = num;
+        if (this.currentBox) { this.currentBox.remove(); this.currentBox = null; }
       }
 
       changePage(delta) {
@@ -336,7 +470,7 @@
         this.renderPage(this.pageNum);
       }
 
-      // --- WORKSPACE GENERATION ---
+      // --- WORKSPACE CREATION ---
       async generateWorkspace() {
         const fileInput = document.getElementById('setup-pdf');
         if (!fileInput.files.length) { alert("Please upload a PDF."); return; }
@@ -344,7 +478,6 @@
         const catSelect = document.getElementById('setup-category');
         const catText = catSelect.options[catSelect.selectedIndex].text;
 
-        // Save Metadata
         this.appState.metadata = {
           title: document.getElementById('setup-title').value || 'Untitled',
           citation: document.getElementById('setup-citation').value || '',
@@ -356,60 +489,56 @@
           pedagogical_focus: document.getElementById('setup-focus').value || '',
         };
 
-        // Parse Headings
         const rawHeadings = document.getElementById('setup-headings').value;
         const headings = rawHeadings.split(/\n\s*\n/).map(h => h.trim()).filter(h => h);
-        
-        if (headings.length === 0) { alert("Please enter at least one framework heading."); return; }
+        if (headings.length === 0) { alert("Please enter framework headings."); return; }
 
         this.appState.steps = headings.map((h, idx) => ({ title: h, index: idx + 1 }));
 
-        // Transition UI
         document.getElementById('view-setup').style.display = 'none';
         document.getElementById('view-workspace').style.display = 'flex';
         document.getElementById('nav-title').textContent = this.appState.metadata.title;
 
-        // Build Right Pane Forms
         this.renderForms();
-
-        // Load PDF
         await this.loadPDF(fileInput.files[0]);
       }
 
       renderForms() {
         const pane = document.getElementById('forms-pane');
         pane.innerHTML = this.appState.steps.map((step, i) => `
-          <div class="step-card" id="card_${i}">
+          <div class="step-card" id="card_${i}" data-evidence-type="none" data-bounding-box="null">
             <div class="step-header">
               <span class="has-text-weight-bold is-size-6">${step.title}</span>
-              <button class="button is-small is-outlined is-info" onclick="maker.setTarget(${i})">
-                🎯 Target
-              </button>
+              <button class="button is-small is-outlined is-info" onclick="maker.setTarget(${i})">🎯 Target</button>
             </div>
             <div class="step-body">
               <div class="field">
                 <label class="label is-small">Expert Verdict</label>
-                <div class="control">
-                  <div class="select is-small is-fullwidth">
-                    <select id="verdict_${i}">
-                      <option value="Adequate / Low Risk">Adequate / Low Risk</option>
-                      <option value="Inadequate / High Risk">Inadequate / High Risk</option>
-                      <option value="Unclear / Not Stated">Unclear / Not Stated</option>
-                      <option value="N/A">Not Applicable</option>
-                    </select>
-                  </div>
+                <div class="select is-small is-fullwidth">
+                  <select id="verdict_${i}">
+                    <option value="Adequate / Low Risk">Adequate / Low Risk</option>
+                    <option value="Inadequate / High Risk">Inadequate / High Risk</option>
+                    <option value="Unclear / Not Stated">Unclear / Not Stated</option>
+                    <option value="N/A">Not Applicable</option>
+                  </select>
                 </div>
               </div>
               <div class="field">
-                <label class="label is-small">Expert Commentary (Socratic)</label>
+                <label class="label is-small">Expert Commentary</label>
                 <textarea class="textarea is-small" id="comment_${i}" rows="2" placeholder="Explain your verdict..."></textarea>
               </div>
               <div class="field">
                 <label class="label is-small has-text-warning">Common Student Pitfall (Optional)</label>
-                <textarea class="textarea is-small" id="trap_${i}" rows="1" placeholder="What do students usually get wrong here?"></textarea>
+                <input class="input is-small" type="text" id="trap_${i}" placeholder="What do students get wrong here?">
               </div>
+              
               <hr style="background-color: rgba(255,255,255,0.1); margin: 12px 0;">
-              <p class="is-size-7 has-text-info has-text-weight-bold mb-2"><i class="fa-solid fa-quote-left mr-1"></i> Grounded Evidence</p>
+              
+              <div class="is-flex is-justify-content-space-between is-align-items-center mb-2">
+                <p class="is-size-7 has-text-info has-text-weight-bold"><i class="fa-solid fa-quote-left mr-1"></i> Grounded Evidence</p>
+                <span class="coord-badge" id="coord_badge_${i}">No coordinates captured</span>
+              </div>
+              
               <div class="columns is-mobile">
                 <div class="column is-3">
                   <input class="input is-small" type="number" id="page_${i}" placeholder="Page">
@@ -418,7 +547,7 @@
                   <input class="input is-small" type="text" id="section_${i}" placeholder="Section (e.g. Methods)">
                 </div>
               </div>
-              <textarea class="textarea is-small" id="quote_${i}" rows="2" placeholder="Select text on the PDF and click the floating 📌 button to auto-fill this."></textarea>
+              <textarea class="textarea is-small" id="quote_${i}" rows="2" placeholder="Highlight text or draw a box over a figure to auto-fill."></textarea>
             </div>
           </div>
         `).join('');
@@ -429,14 +558,12 @@
         document.querySelectorAll('.step-card').forEach(c => c.classList.remove('is-targeted'));
         document.getElementById(`card_${index}`).classList.add('is-targeted');
         
-        const stepName = this.appState.steps[index].title;
         const badge = document.getElementById('active-target-badge');
-        badge.innerHTML = `<i class="fa-solid fa-crosshairs mr-1"></i> Targeting: ${stepName.substring(0, 20)}...`;
-        badge.classList.remove('is-dark');
-        badge.classList.add('is-info');
+        badge.innerHTML = `<i class="fa-solid fa-crosshairs mr-1"></i> Targeting Step ${index + 1}`;
+        badge.classList.replace('is-dark', 'is-info');
       }
 
-      // --- EXPORT DATA ---
+      // --- EXPORT JSON FOR SUPABASE ---
       exportJSON() {
         const payload = {
           category_id: this.appState.metadata.category_id,
@@ -451,7 +578,10 @@
           expert_annotated_critique: {
             overall_expert_verdict: "Valid",
             steps: this.appState.steps.map((step, i) => {
+              const card = document.getElementById(`card_${i}`);
               const pitfall = document.getElementById(`trap_${i}`).value.trim();
+              const boundingBoxStr = card.dataset.boundingBox;
+              
               return {
                 step_index: i + 1,
                 criterion_title: step.title,
@@ -461,7 +591,9 @@
                 cited_evidence: {
                   page: parseInt(document.getElementById(`page_${i}`).value) || 1,
                   section: document.getElementById(`section_${i}`).value.trim(),
-                  quote: document.getElementById(`quote_${i}`).value.trim()
+                  type: card.dataset.evidenceType, // 'text' or 'figure'
+                  quote: document.getElementById(`quote_${i}`).value.trim(),
+                  bounding_box: boundingBoxStr !== 'null' ? JSON.parse(boundingBoxStr) : null
                 }
               };
             })
@@ -471,7 +603,7 @@
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
         const anchor = document.createElement('a');
         anchor.setAttribute("href", dataStr);
-        anchor.setAttribute("download", `expert_critique_${Date.now()}.json`);
+        anchor.setAttribute("download", `critique_${Date.now()}.json`);
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
