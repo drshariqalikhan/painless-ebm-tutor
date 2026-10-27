@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Practice Library Maker - Painless EBM</title>
+
+  <!-- Bulma CSS & FontAwesome -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0a0e17;
+      --surface-dark: #131b26;
+      --surface-header: #1d283a;
+      --accent-blue: #00a3e0;
+    }
+    body, html {
+      background-color: var(--bg-dark);
+      color: #e2e8f0;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    
+    /* Global Bulma Overrides for Dark Mode */
+    .box, .modal-card-body, .input, .textarea, .select select {
+      background-color: var(--surface-dark);
+      color: white;
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    .input::placeholder, .textarea::placeholder { color: rgba(255,255,255,0.3); }
+    .title, .subtitle, .label { color: white !important; }
+    
+    /* Layouts */
+    #view-setup { height: 100vh; overflow-y: auto; padding: 40px 20px; }
+    #view-workspace { display: none; height: 100vh; flex-direction: column; }
+    
+    .navbar { background-color: var(--surface-header) !important; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .split-container { display: flex; flex: 1; overflow: hidden; }
+    .left-pane { flex: 1; border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; background: #1a1e29; }
+    .right-pane { flex: 1; overflow-y: auto; padding: 20px; background-color: var(--bg-dark); }
+    
+    /* PDF Viewer */
+    .pdf-toolbar { background-color: var(--surface-header); padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .pdf-canvas-wrapper { flex: 1; overflow: auto; position: relative; padding: 20px; display: flex; justify-content: center; align-items: flex-start; }
+    #pdf-page-container { position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+    #pdf-canvas { display: block; }
+    
+    /* Text Layer for Selection */
+    .textLayer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; opacity: 0.2; line-height: 1.0; }
+    .textLayer span { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+    ::selection { background: rgba(0, 163, 224, 0.5); color: transparent; }
+
+    /* Floating Action Button (Option B) */
+    #floating-highlighter {
+      position: absolute;
+      display: none;
+      z-index: 1000;
+      transform: translate(-50%, -100%);
+      margin-top: -10px;
+    }
+
+    /* Accordion Cards */
+    .step-card { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 16px; background-color: var(--surface-dark); transition: border 0.3s; }
+    .step-card.is-targeted { border: 2px solid var(--accent-blue); box-shadow: 0 0 15px rgba(0, 163, 224, 0.2); }
+    .step-header { background-color: var(--surface-header); padding: 12px 16px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
+    .step-body { padding: 16px; }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== PHASE 1: SETUP SCREEN ==================== -->
+  <div id="view-setup">
+    <div class="container is-max-desktop">
+      <div class="has-text-centered mb-5">
+        <i class="fa-solid fa-microscope fa-3x has-text-info mb-3"></i>
+        <h1 class="title">Practice Library Maker</h1>
+        <p class="subtitle is-6 has-text-grey">Generate expert-annotated clinical papers for the Painless EBM Knowledgebase.</p>
+      </div>
+
+      <div class="box">
+        <h2 class="title is-5 mb-4">1. Paper Metadata</h2>
+        
+        <div class="field">
+          <label class="label">Upload PDF</label>
+          <div class="control">
+            <input class="input" type="file" id="setup-pdf" accept="application/pdf">
+          </div>
+        </div>
+
+        <div class="columns is-multiline">
+          <div class="column is-12">
+            <label class="label">Paper Title</label>
+            <input class="input" type="text" id="setup-title" placeholder="e.g. Early vs Delayed Vasopressin...">
+          </div>
+          <div class="column is-6">
+            <label class="label">Citation</label>
+            <input class="input" type="text" id="setup-citation" placeholder="e.g. N Engl J Med 2024; 390: 1210-1221">
+          </div>
+          <div class="column is-6">
+            <label class="label">Specialty</label>
+            <div class="select is-fullwidth">
+              <select id="setup-specialty">
+                <option value="medicine">Medicine</option>
+                <option value="surgery">Surgery</option>
+                <option value="critical_care">Critical Care</option>
+                <option value="anaesthesia">Anaesthesia</option>
+              </select>
+            </div>
+          </div>
+          <div class="column is-12">
+            <label class="label">Research Category</label>
+            <div class="select is-fullwidth">
+              <select id="setup-category">
+                <option value="1">1. Drug Treatments & Simple Interventions (CONSORT)</option>
+                <option value="2">2. Complex Interventions (MRC Framework)</option>
+                <option value="3">3. Diagnostic & Screening Tests (STARD)</option>
+                <option value="4">4. Systematic Reviews & Meta-Analyses (PRISMA)</option>
+                <option value="5">5. Clinical Practice Guidelines (AGREE II)</option>
+                <option value="6">6. Economic Analyses (CHEERS)</option>
+                <option value="7">7. Qualitative Research (CASP)</option>
+                <option value="8">8. Questionnaire & Survey Research (CROSS)</option>
+                <option value="9">9. Quality Improvement (SQUIRE 2.0)</option>
+              </select>
+            </div>
+          </div>
+          <div class="column is-6">
+            <label class="label">Difficulty</label>
+            <div class="select is-fullwidth">
+              <select id="setup-difficulty">
+                <option value="Introductory">Introductory</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="Advanced">Advanced</option>
+              </select>
+            </div>
+          </div>
+          <div class="column is-6">
+            <label class="label">Pedagogical Focus / Core Trap</label>
+            <input class="input" type="text" id="setup-focus" placeholder="e.g. Allocation Concealment vs Sequence Gen">
+          </div>
+        </div>
+      </div>
+
+      <div class="box mt-4">
+        <h2 class="title is-5 mb-4">2. Appraisal Framework Headings</h2>
+        <p class="is-size-7 has-text-grey-light mb-2">Enter the sequential appraisal steps for this category, separated by a blank line.</p>
+        <textarea class="textarea" id="setup-headings" rows="8" placeholder="1. Random Sequence Generation&#10;&#10;2. Allocation Concealment&#10;&#10;3. Blinding..."></textarea>
+      </div>
+
+      <button class="button is-info is-medium is-fullwidth mt-5" onclick="maker.generateWorkspace()">
+        <i class="fa-solid fa-table-columns mr-2"></i> Launch Annotation Workspace
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== PHASE 2: SPLIT-SCREEN WORKSPACE ==================== -->
+  <div id="view-workspace">
+    <!-- Navbar -->
+    <nav class="navbar is-dark px-4 py-2">
+      <div class="navbar-brand is-align-items-center">
+        <i class="fa-solid fa-vial has-text-info mr-2"></i>
+        <strong class="has-text-white" id="nav-title">Annotation Workspace</strong>
+      </div>
+      <div class="navbar-end is-align-items-center">
+        <span class="tag is-dark is-medium mr-3" id="active-target-badge">No Step Targeted</span>
+        <button class="button is-success is-small" onclick="maker.exportJSON()">
+          <i class="fa-solid fa-download mr-2"></i> Export JSON
+        </button>
+      </div>
+    </nav>
+
+    <div class="split-container">
+      
+      <!-- LEFT PANE: PDF.js VIEWER -->
+      <div class="left-pane" id="pdf-pane">
+        <div class="pdf-toolbar">
+          <div>
+            <button class="button is-small is-dark" onclick="maker.changePage(-1)"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="mx-2 is-size-7">Page <span id="page-num">1</span> / <span id="page-count">-</span></span>
+            <button class="button is-small is-dark" onclick="maker.changePage(1)"><i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+          <div>
+            <button class="button is-small is-dark" onclick="maker.zoom(-0.2)"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+            <button class="button is-small is-dark" onclick="maker.zoom(0.2)"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+          </div>
+        </div>
+        
+        <div class="pdf-canvas-wrapper" id="pdf-canvas-wrapper">
+          <div id="pdf-page-container">
+            <canvas id="pdf-canvas"></canvas>
+            <div id="pdf-text-layer" class="textLayer"></div>
+          </div>
+          
+          <!-- OPTION B: THE FLOATING HIGHLIGHTER BUTTON -->
+          <button id="floating-highlighter" class="button is-info is-small is-rounded shadow" onclick="maker.captureEvidence()">
+            <i class="fa-solid fa-thumbtack mr-1"></i> Send to Active Step
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT PANE: ACCORDION FORMS -->
+      <div class="right-pane" id="forms-pane">
+        <!-- Dynamically populated by maker.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    class LibraryMaker {
+      constructor() {
+        this.pdfDoc = null;
+        this.pageNum = 1;
+        this.scale = 1.3;
+        this.canvas = document.getElementById('pdf-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.textLayerDiv = document.getElementById('pdf-text-layer');
+        this.wrapper = document.getElementById('pdf-canvas-wrapper');
+        this.floatingBtn = document.getElementById('floating-highlighter');
+        
+        this.activeStepIndex = null;
+        this.selectedText = "";
+        
+        this.appState = {
+          metadata: {},
+          steps: []
+        };
+
+        this.bindTextSelection();
+      }
+
+      // --- TEXT SELECTION & FLOATING BUTTON (OPTION B) ---
+      bindTextSelection() {
+        this.wrapper.addEventListener('mouseup', (e) => {
+          // Wait a tiny bit for double-click selections to resolve
+          setTimeout(() => {
+            const selection = window.getSelection();
+            const text = selection.toString().trim();
+            
+            if (text.length > 0) {
+              this.selectedText = text.replace(/\s+/g, ' '); // Clean line breaks
+              const range = selection.getRangeAt(0);
+              const rect = range.getBoundingClientRect();
+              const wrapperRect = this.wrapper.getBoundingClientRect();
+              
+              const top = rect.top - wrapperRect.top + this.wrapper.scrollTop - 40;
+              const left = rect.left - wrapperRect.left + this.wrapper.scrollLeft + (rect.width / 2);
+              
+              this.floatingBtn.style.top = `${top}px`;
+              this.floatingBtn.style.left = `${left}px`;
+              this.floatingBtn.style.display = 'block';
+            } else {
+              this.floatingBtn.style.display = 'none';
+            }
+          }, 100);
+        });
+
+        // Hide button on scroll or mousedown elsewhere
+        this.wrapper.addEventListener('scroll', () => { this.floatingBtn.style.display = 'none'; });
+        this.wrapper.addEventListener('mousedown', (e) => {
+          if (e.target.id !== 'floating-highlighter') {
+            this.floatingBtn.style.display = 'none';
+          }
+        });
+      }
+
+      captureEvidence() {
+        if (this.activeStepIndex === null) {
+          alert('Please click "🎯 Target" on a framework step card on the right first!');
+          this.floatingBtn.style.display = 'none';
+          return;
+        }
+
+        // Auto-fill the active step's evidence inputs
+        document.getElementById(`quote_${this.activeStepIndex}`).value = this.selectedText;
+        document.getElementById(`page_${this.activeStepIndex}`).value = this.pageNum;
+        
+        // Visual confirmation
+        this.floatingBtn.style.display = 'none';
+        window.getSelection().removeAllRanges();
+      }
+
+      // --- PDF.js CONTROLS ---
+      async loadPDF(file) {
+        const fileUrl = URL.createObjectURL(file);
+        this.pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;
+        document.getElementById('page-count').textContent = this.pdfDoc.numPages;
+        this.renderPage(this.pageNum);
+      }
+
+      async renderPage(num) {
+        const page = await this.pdfDoc.getPage(num);
+        const viewport = page.getViewport({ scale: this.scale });
+
+        this.canvas.height = viewport.height;
+        this.canvas.width = viewport.width;
+
+        const renderContext = { canvasContext: this.ctx, viewport: viewport };
+        await page.render(renderContext).promise;
+
+        // Render Text Layer for Selection
+        this.textLayerDiv.innerHTML = '';
+        this.textLayerDiv.style.height = `${viewport.height}px`;
+        this.textLayerDiv.style.width = `${viewport.width}px`;
+
+        const textContent = await page.getTextContent();
+        pdfjsLib.renderTextLayer({
+          textContent: textContent,
+          container: this.textLayerDiv,
+          viewport: viewport,
+          textDivs: []
+        });
+
+        document.getElementById('page-num').textContent = num;
+      }
+
+      changePage(delta) {
+        let newPage = this.pageNum + delta;
+        if (newPage >= 1 && newPage <= this.pdfDoc.numPages) {
+          this.pageNum = newPage;
+          this.renderPage(this.pageNum);
+          this.wrapper.scrollTop = 0;
+        }
+      }
+
+      zoom(delta) {
+        this.scale = Math.min(Math.max(0.8, this.scale + delta), 2.5);
+        this.renderPage(this.pageNum);
+      }
+
+      // --- WORKSPACE GENERATION ---
+      async generateWorkspace() {
+        const fileInput = document.getElementById('setup-pdf');
+        if (!fileInput.files.length) { alert("Please upload a PDF."); return; }
+
+        const catSelect = document.getElementById('setup-category');
+        const catText = catSelect.options[catSelect.selectedIndex].text;
+
+        // Save Metadata
+        this.appState.metadata = {
+          title: document.getElementById('setup-title').value || 'Untitled',
+          citation: document.getElementById('setup-citation').value || '',
+          specialty: document.getElementById('setup-specialty').value,
+          category_id: parseInt(catSelect.value),
+          category_name: catText.split('. ')[1].split(' (')[0],
+          quality_framework: catText.split('(')[1].replace(')',''),
+          difficulty: document.getElementById('setup-difficulty').value,
+          pedagogical_focus: document.getElementById('setup-focus').value || '',
+        };
+
+        // Parse Headings
+        const rawHeadings = document.getElementById('setup-headings').value;
+        const headings = rawHeadings.split(/\n\s*\n/).map(h => h.trim()).filter(h => h);
+        
+        if (headings.length === 0) { alert("Please enter at least one framework heading."); return; }
+
+        this.appState.steps = headings.map((h, idx) => ({ title: h, index: idx + 1 }));
+
+        // Transition UI
+        document.getElementById('view-setup').style.display = 'none';
+        document.getElementById('view-workspace').style.display = 'flex';
+        document.getElementById('nav-title').textContent = this.appState.metadata.title;
+
+        // Build Right Pane Forms
+        this.renderForms();
+
+        // Load PDF
+        await this.loadPDF(fileInput.files[0]);
+      }
+
+      renderForms() {
+        const pane = document.getElementById('forms-pane');
+        pane.innerHTML = this.appState.steps.map((step, i) => `
+          <div class="step-card" id="card_${i}">
+            <div class="step-header">
+              <span class="has-text-weight-bold is-size-6">${step.title}</span>
+              <button class="button is-small is-outlined is-info" onclick="maker.setTarget(${i})">
+                🎯 Target
+              </button>
+            </div>
+            <div class="step-body">
+              <div class="field">
+                <label class="label is-small">Expert Verdict</label>
+                <div class="control">
+                  <div class="select is-small is-fullwidth">
+                    <select id="verdict_${i}">
+                      <option value="Adequate / Low Risk">Adequate / Low Risk</option>
+                      <option value="Inadequate / High Risk">Inadequate / High Risk</option>
+                      <option value="Unclear / Not Stated">Unclear / Not Stated</option>
+                      <option value="N/A">Not Applicable</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="field">
+                <label class="label is-small">Expert Commentary (Socratic)</label>
+                <textarea class="textarea is-small" id="comment_${i}" rows="2" placeholder="Explain your verdict..."></textarea>
+              </div>
+              <div class="field">
+                <label class="label is-small has-text-warning">Common Student Pitfall (Optional)</label>
+                <textarea class="textarea is-small" id="trap_${i}" rows="1" placeholder="What do students usually get wrong here?"></textarea>
+              </div>
+              <hr style="background-color: rgba(255,255,255,0.1); margin: 12px 0;">
+              <p class="is-size-7 has-text-info has-text-weight-bold mb-2"><i class="fa-solid fa-quote-left mr-1"></i> Grounded Evidence</p>
+              <div class="columns is-mobile">
+                <div class="column is-3">
+                  <input class="input is-small" type="number" id="page_${i}" placeholder="Page">
+                </div>
+                <div class="column is-9">
+                  <input class="input is-small" type="text" id="section_${i}" placeholder="Section (e.g. Methods)">
+                </div>
+              </div>
+              <textarea class="textarea is-small" id="quote_${i}" rows="2" placeholder="Select text on the PDF and click the floating 📌 button to auto-fill this."></textarea>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      setTarget(index) {
+        this.activeStepIndex = index;
+        document.querySelectorAll('.step-card').forEach(c => c.classList.remove('is-targeted'));
+        document.getElementById(`card_${index}`).classList.add('is-targeted');
+        
+        const stepName = this.appState.steps[index].title;
+        const badge = document.getElementById('active-target-badge');
+        badge.innerHTML = `<i class="fa-solid fa-crosshairs mr-1"></i> Targeting: ${stepName.substring(0, 20)}...`;
+        badge.classList.remove('is-dark');
+        badge.classList.add('is-info');
+      }
+
+      // --- EXPORT DATA ---
+      exportJSON() {
+        const payload = {
+          category_id: this.appState.metadata.category_id,
+          category_name: this.appState.metadata.category_name,
+          specialty: this.appState.metadata.specialty,
+          title: this.appState.metadata.title,
+          citation: this.appState.metadata.citation,
+          quality_framework: this.appState.metadata.quality_framework,
+          difficulty: this.appState.metadata.difficulty,
+          pedagogical_focus: this.appState.metadata.pedagogical_focus,
+          pdf_storage_path: `library/${this.appState.metadata.specialty}_auto.pdf`, // placeholder
+          expert_annotated_critique: {
+            overall_expert_verdict: "Valid",
+            steps: this.appState.steps.map((step, i) => {
+              const pitfall = document.getElementById(`trap_${i}`).value.trim();
+              return {
+                step_index: i + 1,
+                criterion_title: step.title,
+                expert_verdict: document.getElementById(`verdict_${i}`).value,
+                expert_commentary: document.getElementById(`comment_${i}`).value.trim(),
+                common_student_pitfalls: pitfall ? [pitfall] : [],
+                cited_evidence: {
+                  page: parseInt(document.getElementById(`page_${i}`).value) || 1,
+                  section: document.getElementById(`section_${i}`).value.trim(),
+                  quote: document.getElementById(`quote_${i}`).value.trim()
+                }
+              };
+            })
+          }
+        };
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+        const anchor = document.createElement('a');
+        anchor.setAttribute("href", dataStr);
+        anchor.setAttribute("download", `expert_critique_${Date.now()}.json`);
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+    }
+
+    const maker = new LibraryMaker();
+  </script>
+</body>
+</html>
