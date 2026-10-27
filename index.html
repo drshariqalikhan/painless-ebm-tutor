@@ -39,6 +39,12 @@
       </div>
       <div class="navbar-end mr-3">
         <div class="navbar-item">
+          
+          <!-- LIVE DEBUG LOG TOGGLE -->
+          <button class="button is-small is-dark mr-3" onclick="app.toggleLogDrawer()" title="Toggle Event & Error Log">
+            <i class="fa-solid fa-terminal has-text-success mr-1"></i> Logs <span id="log-badge" class="tag is-success is-rounded is-small ml-1">0</span>
+          </button>
+
           <!-- COIN WALLET BADGE -->
           <div class="tags has-addons mr-3 mb-0">
             <span class="tag is-warning is-dark"><i class="fa-solid fa-coins mr-1"></i> EBM Coins</span>
@@ -97,14 +103,14 @@
           <li id="left-tab-pdf" class="is-active">
             <a onclick="app.switchLeftTab('pdf')"><i class="fa-solid fa-file-pdf mr-1"></i> Research Paper</a>
           </li>
-          <li id="left-tab-fw">
+          <li id="left-tab-framework">
             <a onclick="app.switchLeftTab('framework')"><i class="fa-solid fa-clipboard-list mr-1"></i> Appraisal Framework</a>
           </li>
         </ul>
       </div>
 
       <!-- TAB CONTENT CONTAINER 1: PDF VIEWER -->
-      <div id="tab-content-pdf" class="is-flex flex-column" style="flex: 1; overflow: hidden;">
+      <div id="tab-content-pdf" class="is-flex flex-column" style="flex: 1; overflow: hidden; display: flex;">
         <div class="pdf-toolbar level is-mobile px-3 py-2">
           <div class="level-left">
             <button class="button is-small is-dark" id="pdf-prev" title="Previous Page">
@@ -217,6 +223,22 @@
       </div>
 
     </section>
+  </div>
+
+  <!-- LIVE DEBUG EVENT & ERROR LOG DRAWER -->
+  <div id="debug-drawer" class="has-background-black-bis p-4" style="position: fixed; bottom: 0; left: 0; right: 0; height: 220px; z-index: 1000; border-top: 2px solid #00a3e0; display: none; overflow-y: auto; font-family: monospace; font-size: 0.8rem;">
+    <div class="is-flex is-justify-content-space-between is-align-items-center mb-2">
+      <span class="has-text-weight-bold has-text-success">
+        <i class="fa-solid fa-terminal mr-1"></i> EBM Tutor - Live Execution & Error Log
+      </span>
+      <div>
+        <button class="button is-small is-dark mr-2" onclick="app.clearLogs()">Clear</button>
+        <button class="button is-small is-danger is-light" onclick="app.toggleLogDrawer()">Close ✕</button>
+      </div>
+    </div>
+    <div id="log-entries">
+      <!-- Log entries appear here -->
+    </div>
   </div>
 
   <!-- MODAL: PRACTICE LIBRARY PICKER -->
