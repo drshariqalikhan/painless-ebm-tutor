@@ -48,7 +48,7 @@
           <!-- COIN WALLET BADGE -->
           <div class="tags has-addons mr-3 mb-0">
             <span class="tag is-warning is-dark"><i class="fa-solid fa-coins mr-1"></i> EBM Coins</span>
-            <span class="tag is-warning" id="user-coin-balance">50</span>
+            <span class="tag is-warning" id="user-coin-balance">...</span>
           </div>
 
           <!-- BUY COINS BUTTON -->
@@ -64,6 +64,10 @@
             <i class="fa-solid fa-upload mr-1"></i> Upload PDF (-50 🪙)
             <input type="file" id="pdf-file-input" accept="application/pdf" style="display: none;">
           </label>
+
+          <span class="tag is-rounded is-dark" title="Development/Tester Mode Active">
+            <i class="fa-solid fa-flask has-text-warning mr-1"></i> Tester Mode
+          </span>
         </div>
       </div>
     </div>
@@ -150,8 +154,8 @@
 
       <!-- TAB CONTENT CONTAINER 2: APPRAISAL FRAMEWORK CHECKLIST -->
       <div id="tab-content-framework" class="p-4" style="flex: 1; overflow-y: auto; display: none;">
-        <h3 class="title is-6 has-text-white mb-1" id="fw-category-title">CONSORT / Therapy Framework</h3>
-        <p class="subtitle is-7 has-text-grey-light mb-4" id="fw-category-desc">Systematic validity guidelines for evaluating clinical trial interventions.</p>
+        <h3 class="title is-6 has-text-white mb-1" id="fw-category-title">Select a Paper</h3>
+        <p class="subtitle is-7 has-text-grey-light mb-4" id="fw-category-desc">The specific quality framework will load here based on the study design.</p>
         
         <div class="timeline-container" id="framework-steps-list">
           <!-- Dynamically populated checklist steps -->
@@ -167,14 +171,14 @@
       <div class="chat-header px-4 py-3">
         <div class="level is-mobile mb-1">
           <div class="level-left">
-            <span class="tag is-primary is-light is-small" id="step-badge">Step 0 / 7</span>
+            <span class="tag is-primary is-light is-small" id="step-badge">Step 0 / ?</span>
             <span class="tag is-dark is-rounded is-small ml-2" id="model-indicator-badge">
               <i class="fa-solid fa-microchip has-text-info mr-1"></i>
-              <span id="active-model-name">Gemini 3.5 Flash-Lite</span>
+              <span id="active-model-name">System</span>
             </span>
           </div>
           <div class="level-right">
-            <span class="is-size-7 has-text-grey-light" id="step-title">Study Design & Directness</span>
+            <span class="is-size-7 has-text-grey-light" id="step-title">Awaiting Selection</span>
           </div>
         </div>
         <progress class="progress is-info is-small" id="checklist-progress" value="0" max="7"></progress>
@@ -193,7 +197,7 @@
           </div>
           👋 Welcome to the <strong>Painless EBM Tutor</strong>!
           <br><br>
-          Select a paper from the <strong>Practice Library</strong> or upload a PDF above to begin our step-by-step Socratic appraisal.
+          Select a paper from the <strong>Practice Library</strong> (Free 🪙) or upload your own PDF to begin our step-by-step Socratic appraisal.
         </div>
       </div>
 
@@ -211,10 +215,10 @@
         <form id="chat-form" onsubmit="app.handleStudentSubmit(event)">
           <div class="field has-addons">
             <div class="control is-expanded">
-              <input type="text" id="chat-input" class="input is-dark" placeholder="State your evaluation and rationale..." autocomplete="off">
+              <input type="text" id="chat-input" class="input is-dark" placeholder="Select a paper to begin..." autocomplete="off" disabled>
             </div>
             <div class="control">
-              <button type="submit" id="btn-send" class="button is-info">
+              <button type="submit" id="btn-send" class="button is-info" disabled>
                 <i class="fa-solid fa-paper-plane"></i>
               </button>
             </div>
@@ -286,7 +290,7 @@
         <p class="is-size-7 has-text-grey mb-3">Select the appropriate appraisal framework below:</p>
         
         <div class="buttons" id="category-selection-grid">
-          <!-- 9 Category Buttons populated dynamically -->
+          <!-- 9 Category Buttons populated dynamically by app.js -->
         </div>
       </section>
     </div>
@@ -307,6 +311,7 @@
           Coins power the AI Attending Tutor and full-document custom paper ingestion.
         </p>
         <div class="columns is-multiline">
+          <!-- 50 Coin Pack -->
           <div class="column is-6">
             <div class="box has-background-dark has-text-centered p-4" style="border: 1px solid rgba(255,255,255,0.1);">
               <h4 class="title is-5 has-text-white mb-1">50 Coins</h4>
@@ -316,6 +321,7 @@
               </button>
             </div>
           </div>
+          <!-- 150 Coin Pack (Best Value) -->
           <div class="column is-6">
             <div class="box has-background-dark has-text-centered p-4" style="border: 1px solid #ffd700;">
               <span class="tag is-warning is-small mb-1">BEST VALUE</span>

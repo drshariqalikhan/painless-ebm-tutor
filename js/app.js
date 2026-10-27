@@ -6,7 +6,7 @@ class EbmTutorApp {
     this.libraryPapers = [];
     this.selectedPill = null;
     this.activeModel = 'Gemini 3.5 Flash-Lite';
-    this.coinBalance = 50;
+    this.coinBalance = 0;
     this.logCount = 0;
     this.currentCategories = [
       { id: 1, name: 'Drug Treatments & Simple Interventions', std: 'CONSORT / Dans' },
@@ -19,6 +19,9 @@ class EbmTutorApp {
       { id: 8, name: 'Questionnaire & Survey Research', std: 'CROSS / CHERRIES' },
       { id: 9, name: 'Quality Improvement (QI) Case Studies', std: 'SQUIRE 2.0' }
     ];
+    this.pendingUploadFile = null;
+
+    this.init();
   }
 
   // ================= LIVE DEBUG LOGGER =================
@@ -82,6 +85,7 @@ class EbmTutorApp {
     }
   }
 
+  // ================= WALLET & COIN MANAGEMENT =================
   async fetchWalletBalance() {
     this.logEvent('Wallet', `Querying coin balance for device: ${this.deviceId}`);
     try {
@@ -105,6 +109,36 @@ class EbmTutorApp {
     if (badge) badge.textContent = newBalance;
   }
 
+  openBuyCoinsModal() {
+    document.getElementById('modal-buy-coins').classList.add('is-active');
+  }
+
+  closeBuyCoinsModal() {
+    document.getElementById('modal-buy-coins').classList.remove('is-active');
+  }
+
+  // FIXED: Sync simulated purchase to Supabase DB so Edge Function sees it!
+  async simulatePurchase(amount, price) {
+    alert(`Stripe integration placeholder:\nSuccessfully purchased ${amount} coins for ${price}!`);
+    const newBalance = this.coinBalance + amount;
+    this.updateCoinDisplay(newBalance);
+    this.closeBuyCoinsModal();
+    this.logEvent('Wallet', `User simulated purchasing ${amount} coins. Syncing to DB...`);
+
+    try {
+      const { error } = await supabaseClient
+        .from('user_wallets')
+        .update({ coin_balance: newBalance })
+        .eq('device_id', this.deviceId);
+        
+      if (error) throw error;
+      this.logEvent('Wallet', `Successfully synced new balance (${newBalance}) to database.`, 'success');
+    } catch (e) {
+      this.logEvent('Wallet', `Failed to sync database balance: ${e.message}`, 'error');
+    }
+  }
+
+  // ================= PRACTICE LIBRARY =================
   async loadPracticeLibrary() {
     this.logEvent('Library', 'Fetching practice papers from Supabase database...');
     try {
@@ -160,7 +194,7 @@ class EbmTutorApp {
           <p class="has-text-warning is-size-7 mb-3">
             <i class="fa-solid fa-bullseye mr-1"></i>Focus: ${p.pedagogical_focus}
           </p>
-          <button class="button is-small is-info is-fullwidth" onclick="app.startLibraryPaperAppraisal('${p.id}')">
+          <button class="button is-small is-info is-fullwidth mt-3" onclick="app.startLibraryPaperAppraisal('${p.id}')">
             Appraise This Paper (Free 🪙)
           </button>
         </div>
@@ -182,14 +216,12 @@ class EbmTutorApp {
 
     const { data } = supabaseClient.storage.from('study-papers').getPublicUrl(paper.pdf_storage_path);
     this.logEvent('PDF', `Loading PDF stream from storage URL: ${data.publicUrl}`);
-    
-    // Note: If you haven't uploaded the sample PDF file to Supabase storage yet, 
-    // PDF.js will throw a 400. You can test custom uploads right now using the "Upload PDF" button!
     await pdfViewer.loadPDF(data.publicUrl);
 
     await this.initSessionOnBackend(paper.id, null, paper.title, paper.category_id || 1);
   }
 
+  // ================= CUSTOM PDF UPLOAD & COIN GATE =================
   async handleCustomFileUpload(event) {
     const file = event.target.files[0];
     if (!file || file.type !== 'application/pdf') {
@@ -202,11 +234,12 @@ class EbmTutorApp {
     if (this.coinBalance < 50) {
       this.openBuyCoinsModal();
       this.logEvent('Wallet', 'Upload rejected: Insufficient coin balance (< 50 coins).', 'warning');
-      alert('You need 50 EBM Coins to upload and appraise a custom research paper. Top up via Buy Coins!');
-      event.target.value = '';
+      alert('You need 50 EBM Coins to upload and appraise a custom research paper. Practice Library papers remain completely free!');
+      event.target.value = ''; // reset file input
       return;
     }
 
+    this.pendingUploadFile = file;
     const title = file.name.replace(/\.pdf$/i, '');
     document.getElementById('active-paper-badge').textContent = title;
 
@@ -232,10 +265,12 @@ class EbmTutorApp {
 
     const fileUrl = URL.createObjectURL(file);
     await pdfViewer.loadPDF(fileUrl);
+
     this.openClassificationModal(title);
     event.target.value = '';
   }
 
+  // ================= SOCRATIC CLASSIFICATION DEBATE =================
   openClassificationModal(paperTitle) {
     const modal = document.getElementById('modal-classification');
     const grid = document.getElementById('category-selection-grid');
@@ -261,6 +296,7 @@ class EbmTutorApp {
     await this.initSessionOnBackend(null, null, title, categoryId);
   }
 
+  // Backend Session Initializer
   async initSessionOnBackend(paperId, customPdfUrl, title, categoryId) {
     this.logEvent('Session', `Initializing appraisal session for "${title}" (Category ID: ${categoryId})`);
     const btn = document.getElementById('btn-send');
@@ -285,12 +321,20 @@ class EbmTutorApp {
         this.activeStep = 0;
         this.updateChecklistUI(0, res.framework_name || 'Study Design & Directness', res.checklist);
 
-        if (res.model_used) this.activeModel = res.model_used;
-        this.logEvent('Session', `Session created successfully (ID: ${res.session.id}).`, 'success');
+        if (res.model_used) {
+          this.activeModel = res.model_used;
+        }
 
         const messagesDiv = document.getElementById('chat-messages');
         messagesDiv.innerHTML = '';
         this.addMessageToChat('tutor', res.opening_message, null, this.activeModel);
+        this.logEvent('Session', `Session created successfully (ID: ${res.session.id}).`, 'success');
+
+        // FIXED: Unlock the chat input box now that a session is ready!
+        const chatInput = document.getElementById('chat-input');
+        chatInput.disabled = false;
+        chatInput.placeholder = "State your evaluation and rationale...";
+        document.getElementById('btn-send').disabled = false;
       }
     } catch (err) {
       this.logEvent('Session', `Failed to initialize session: ${err.message}`, 'error');
@@ -299,6 +343,7 @@ class EbmTutorApp {
     }
   }
 
+  // ================= CHAT TURN & SOCRATIC DIALOGUE =================
   addMessageToChat(sender, text, evidence = null, modelUsed = null) {
     const messagesDiv = document.getElementById('chat-messages');
     const bubble = document.createElement('div');
@@ -354,6 +399,8 @@ class EbmTutorApp {
   selectPill(pillText) {
     this.selectedPill = pillText;
     const input = document.getElementById('chat-input');
+    // Ensure it's unlocked if they clicked a pill
+    if(input.disabled) return; 
     input.value = `[${pillText}] `;
     input.focus();
   }
@@ -362,7 +409,13 @@ class EbmTutorApp {
     e.preventDefault();
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
-    if (!text || !this.currentSession) return;
+
+    // Prevent submission if no session exists yet
+    if (!this.currentSession) {
+      alert("Please select a paper from the Practice Library or upload a PDF first.");
+      return;
+    }
+    if (!text) return;
 
     input.value = '';
     this.addMessageToChat('student', text);
@@ -398,8 +451,9 @@ class EbmTutorApp {
       }
 
       if (data && data.tutor_response) {
-        if (data.model_used) this.activeModel = data.model_used;
-        this.logEvent('AI', `AI Tutor responded using model: ${this.activeModel}`, 'success');
+        if (data.model_used) {
+          this.activeModel = data.model_used;
+        }
 
         this.addMessageToChat('tutor', data.tutor_response, data.evidence, data.model_used);
         this.updateChecklistUI(data.current_step, data.step_title);
@@ -412,10 +466,11 @@ class EbmTutorApp {
     } catch (err) {
       btn.classList.remove('is-loading');
       this.logEvent('AI', `Chat turn failed: ${err.message}`, 'error');
-      this.addMessageToChat('tutor', 'Network connection issue or AI timeout. Please retry.');
+      this.addMessageToChat('tutor', 'Network connection issue. Please retry.');
     }
   }
 
+  // ================= UI TAB & VIEW CONTROLLERS =================
   switchLeftTab(tab) {
     document.querySelectorAll('#left-pane-tabs li').forEach(li => li.classList.remove('is-active'));
     document.getElementById(`left-tab-${tab}`).classList.add('is-active');
@@ -451,8 +506,11 @@ class EbmTutorApp {
   }
 
   updateChecklistUI(stepIndex, titleOverride = null, checklist = null) {
+    this.activeStep = stepIndex; // keep track locally
     document.getElementById('step-badge').textContent = `Step ${stepIndex} / 7`;
-    if (titleOverride) document.getElementById('step-title').textContent = titleOverride;
+    if (titleOverride) {
+      document.getElementById('step-title').textContent = titleOverride;
+    }
     document.getElementById('checklist-progress').value = stepIndex;
 
     const stepsList = document.getElementById('framework-steps-list');
@@ -470,12 +528,18 @@ class EbmTutorApp {
     ];
 
     stepsList.innerHTML = steps.map(s => {
+      let statusClass = 'is-pending-step';
       let icon = '<i class="fa-regular fa-circle mr-2 has-text-grey"></i>';
-      if (s.index < stepIndex) icon = '<i class="fa-solid fa-circle-check mr-2 has-text-success"></i>';
-      else if (s.index === stepIndex) icon = '<i class="fa-solid fa-circle-play mr-2 has-text-info"></i>';
+      if (s.index < stepIndex) {
+        statusClass = 'is-completed-step';
+        icon = '<i class="fa-solid fa-circle-check mr-2 has-text-success"></i>';
+      } else if (s.index === stepIndex) {
+        statusClass = 'is-active-step';
+        icon = '<i class="fa-solid fa-circle-play mr-2 has-text-info fa-beat"></i>';
+      }
 
       return `
-        <div class="framework-step-card">
+        <div class="framework-step-card ${statusClass}">
           <div class="is-flex is-align-items-center">
             ${icon}
             <span class="has-text-weight-bold has-text-white is-size-7">Step ${s.index}: ${s.title}</span>
