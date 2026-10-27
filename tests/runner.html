@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Painless EBM - Frontend Test Suite</title>
+  <!-- QUnit CSS from CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/qunit@2.20.0/qunit.css">
+</head>
+<body>
+  <div id="qunit"></div>
+  <div id="qunit-fixture"></div>
+
+  <!-- QUnit JS from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/qunit@2.20.0/qunit.js"></script>
+
+  <!-- Mock DOM elements required by app.js during initialization -->
+  <div style="display:none;">
+    <span id="active-paper-badge"></span>
+    <span id="user-badge"></span>
+    <span id="step-badge"></span>
+    <span id="active-model-name"></span>
+    <span id="step-title"></span>
+    <progress id="checklist-progress" value="0" max="7"></progress>
+    <div id="chat-messages"></div>
+    <div id="quick-pills"></div>
+    <form id="chat-form"></form>
+    <input type="text" id="chat-input">
+    <button id="btn-send"></button>
+    <div id="modal-library"></div>
+    <div id="modal-scorecard"></div>
+    <span id="user-coin-balance"></span>
+  </div>
+
+  <!-- Load App Scripts (Config mocked or loaded) -->
+  <script>
+    // Mock Config before loading app scripts
+    const CONFIG = {
+      SUPABASE_URL: "https://mock.supabase.co",
+      SUPABASE_ANON_KEY: "mock-key",
+      EDGE_FUNCTION_NAME: "ebm-tutor"
+    };
+    const supabaseClient = {
+      storage: { from: () => ({ getPublicUrl: () => ({ data: { publicUrl: '' } }) }) },
+      functions: { invoke: () => Promise.resolve({ data: {} }) }
+    };
+  </script>
+  
+  <!-- Load App Logic to Test -->
+  <script src="../js/app.js"></script>
+
+  <!-- Load Test Specifications -->
+  <script src="test-state-machine.js"></script>
+</body>
+</html>
