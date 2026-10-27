@@ -8,8 +8,17 @@ class EbmTutorApp {
     this.activeModel = 'Gemini 3.5 Flash-Lite';
     this.coinBalance = 50;
     this.logCount = 0;
-
-    this.init();
+    this.currentCategories = [
+      { id: 1, name: 'Drug Treatments & Simple Interventions', std: 'CONSORT / Dans' },
+      { id: 2, name: 'Complex Interventions', std: 'MRC Framework' },
+      { id: 3, name: 'Diagnostic & Screening Tests', std: 'STARD / QUADAS-2' },
+      { id: 4, name: 'Systematic Reviews & Meta-Analyses', std: 'PRISMA / AMSTAR-2' },
+      { id: 5, name: 'Clinical Practice Guidelines', std: 'AGREE II' },
+      { id: 6, name: 'Economic Analyses (Costs & QALYs)', std: 'CHEERS Checklist' },
+      { id: 7, name: 'Qualitative Research', std: 'CASP / COREQ' },
+      { id: 8, name: 'Questionnaire & Survey Research', std: 'CROSS / CHERRIES' },
+      { id: 9, name: 'Quality Improvement (QI) Case Studies', std: 'SQUIRE 2.0' }
+    ];
   }
 
   // ================= LIVE DEBUG LOGGER =================
@@ -33,7 +42,6 @@ class EbmTutorApp {
     entries.appendChild(row);
     entries.scrollTop = entries.scrollHeight;
 
-    // Also pipe to browser console
     if (type === 'error') console.error(`[${category}] ${message}`);
     else console.log(`[${category}] ${message}`);
   }
@@ -119,6 +127,51 @@ class EbmTutorApp {
     }
   }
 
+  filterLibrary(specialty) {
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('is-active', 'is-info'));
+    if (window.event && window.event.target) {
+      window.event.target.classList.add('is-active', 'is-info');
+    }
+
+    if (specialty === 'all') {
+      this.renderLibrary(this.libraryPapers);
+    } else {
+      const filtered = this.libraryPapers.filter(p => p.specialty === specialty);
+      this.renderLibrary(filtered);
+    }
+  }
+
+  renderLibrary(papers) {
+    const list = document.getElementById('library-list');
+    if (!list) return;
+
+    if (papers.length === 0) {
+      list.innerHTML = `<div class="column is-12 has-text-centered has-text-grey py-5">No papers currently in this section. Upload your own PDF to start.</div>`;
+      return;
+    }
+
+    list.innerHTML = papers.map(p => `
+      <div class="column is-6">
+        <div class="box has-background-dark p-4">
+          <span class="tag is-info is-light is-small mb-1">${(p.category_name || p.specialty).toUpperCase()}</span>
+          <span class="tag is-dark is-small mb-1">${p.difficulty}</span>
+          <h4 class="has-text-white is-size-6 has-text-weight-bold mb-1">${p.title}</h4>
+          <p class="has-text-grey is-size-7 mb-2">${p.citation}</p>
+          <p class="has-text-warning is-size-7 mb-3">
+            <i class="fa-solid fa-bullseye mr-1"></i>Focus: ${p.pedagogical_focus}
+          </p>
+          <button class="button is-small is-info is-fullwidth" onclick="app.startLibraryPaperAppraisal('${p.id}')">
+            Appraise This Paper (Free 🪙)
+          </button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  closeLibraryModal() {
+    document.getElementById('modal-library').classList.remove('is-active');
+  }
+
   async startLibraryPaperAppraisal(paperId) {
     const paper = this.libraryPapers.find(p => p.id === paperId);
     if (!paper) return;
@@ -129,6 +182,9 @@ class EbmTutorApp {
 
     const { data } = supabaseClient.storage.from('study-papers').getPublicUrl(paper.pdf_storage_path);
     this.logEvent('PDF', `Loading PDF stream from storage URL: ${data.publicUrl}`);
+    
+    // Note: If you haven't uploaded the sample PDF file to Supabase storage yet, 
+    // PDF.js will throw a 400. You can test custom uploads right now using the "Upload PDF" button!
     await pdfViewer.loadPDF(data.publicUrl);
 
     await this.initSessionOnBackend(paper.id, null, paper.title, paper.category_id || 1);
@@ -146,7 +202,7 @@ class EbmTutorApp {
     if (this.coinBalance < 50) {
       this.openBuyCoinsModal();
       this.logEvent('Wallet', 'Upload rejected: Insufficient coin balance (< 50 coins).', 'warning');
-      alert('You need 50 EBM Coins to upload and appraise a custom research paper.');
+      alert('You need 50 EBM Coins to upload and appraise a custom research paper. Top up via Buy Coins!');
       event.target.value = '';
       return;
     }
@@ -170,6 +226,7 @@ class EbmTutorApp {
     } catch (err) {
       this.logEvent('Wallet', `Custom upload coin transaction failed: ${err.message}`, 'error');
       alert('Coin transaction failed.');
+      event.target.value = '';
       return;
     }
 
@@ -177,6 +234,31 @@ class EbmTutorApp {
     await pdfViewer.loadPDF(fileUrl);
     this.openClassificationModal(title);
     event.target.value = '';
+  }
+
+  openClassificationModal(paperTitle) {
+    const modal = document.getElementById('modal-classification');
+    const grid = document.getElementById('category-selection-grid');
+    
+    const inferredId = 1; 
+    const rec = this.currentCategories.find(c => c.id === inferredId);
+    document.getElementById('suggested-category-name').textContent = `${rec.id}. ${rec.name} (${rec.std})`;
+
+    grid.innerHTML = this.currentCategories.map(cat => `
+      <button class="button is-dark is-small mb-2 mr-2" style="justify-content: flex-start; height: auto; padding: 8px 12px;" onclick="app.selectCategoryAndStart(${cat.id}, '${paperTitle.replace(/'/g, "\\'")}')">
+        <span class="has-text-info mr-2"><b>[${cat.id}]</b></span> 
+        <span class="has-text-white">${cat.name}</span> &nbsp;<span class="has-text-grey">(${cat.std})</span>
+      </button>
+    `).join('');
+
+    modal.classList.add('is-active');
+    this.logEvent('UI', 'Opened Classification Debate modal.');
+  }
+
+  async selectCategoryAndStart(categoryId, title) {
+    document.getElementById('modal-classification').classList.remove('is-active');
+    this.logEvent('Classification', `User selected category ID ${categoryId} for paper "${title}"`);
+    await this.initSessionOnBackend(null, null, title, categoryId);
   }
 
   async initSessionOnBackend(paperId, customPdfUrl, title, categoryId) {
@@ -215,6 +297,65 @@ class EbmTutorApp {
     } finally {
       if (btn) btn.classList.remove('is-loading');
     }
+  }
+
+  addMessageToChat(sender, text, evidence = null, modelUsed = null) {
+    const messagesDiv = document.getElementById('chat-messages');
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble ${sender}`;
+
+    let headerHtml = '';
+    if (sender === 'tutor') {
+      const displayModel = modelUsed || this.activeModel || 'Gemini 3.5 Flash-Lite';
+      const modelLabelEl = document.getElementById('active-model-name');
+      if (modelLabelEl) modelLabelEl.textContent = displayModel;
+
+      headerHtml = `
+        <div class="is-flex is-justify-content-space-between is-align-items-center mb-1">
+          <span class="is-size-7 has-text-weight-bold has-text-info">
+            <i class="fa-solid fa-user-doctor mr-1"></i>AI Attending Tutor
+          </span>
+          <span class="tag is-black is-rounded" style="font-size: 0.65rem; opacity: 0.85;">
+            <i class="fa-solid fa-microchip mr-1"></i>${displayModel}
+          </span>
+        </div>
+      `;
+    }
+
+    let evidenceHtml = '';
+    if (evidence && evidence.quote) {
+      evidenceHtml = `
+        <div class="evidence-card mt-2">
+          <p class="is-size-7 has-text-info has-text-weight-bold">
+            <i class="fa-solid fa-quote-left mr-1"></i> Evidence (Page ${evidence.page || 'Doc'}):
+          </p>
+          <p class="is-size-7 has-text-white-ter is-italic mt-1">"${evidence.quote}"</p>
+          <button class="button is-small is-info is-outlined is-rounded mt-2" onclick="app.jumpToEvidence(${evidence.page || 1}, '${evidence.quote.replace(/'/g, "\\'")}')">
+            <i class="fa-solid fa-location-crosshairs mr-1"></i> View on Page ${evidence.page || 1}
+          </button>
+        </div>
+      `;
+    }
+
+    bubble.innerHTML = `${headerHtml}<div>${text.replace(/\n/g, '<br>')}</div>${evidenceHtml}`;
+    messagesDiv.appendChild(bubble);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+
+  jumpToEvidence(page, quote) {
+    if (window.innerWidth <= 768) {
+      this.switchMobileView('pdf');
+    } else {
+      this.switchLeftTab('pdf');
+    }
+    pdfViewer.jumpToPageAndHighlight(page, quote);
+  }
+
+  selectPill(pillText) {
+    this.selectedPill = pillText;
+    const input = document.getElementById('chat-input');
+    input.value = `[${pillText}] `;
+    input.focus();
   }
 
   async handleStudentSubmit(e) {
@@ -275,25 +416,10 @@ class EbmTutorApp {
     }
   }
 
-  // (Retain rest of existing modal/tab helper functions below...)
-  closeLibraryModal() { document.getElementById('modal-library').classList.remove('is-active'); }
-  openBuyCoinsModal() { document.getElementById('modal-buy-coins').classList.add('is-active'); }
-  closeBuyCoinsModal() { document.getElementById('modal-buy-coins').classList.remove('is-active'); }
-  simulatePurchase(amount, price) {
-    alert(`Stripe purchase placeholder: +${amount} coins for ${price}`);
-    this.updateCoinDisplay(this.coinBalance + amount);
-    this.closeBuyCoinsModal();
-    this.logEvent('Wallet', `User simulated purchasing ${amount} coins.`, 'success');
-  }
-  selectPill(pillText) {
-    this.selectedPill = pillText;
-    const input = document.getElementById('chat-input');
-    input.value = `[${pillText}] `;
-    input.focus();
-  }
   switchLeftTab(tab) {
     document.querySelectorAll('#left-pane-tabs li').forEach(li => li.classList.remove('is-active'));
     document.getElementById(`left-tab-${tab}`).classList.add('is-active');
+
     if (tab === 'pdf') {
       document.getElementById('tab-content-pdf').style.display = 'flex';
       document.getElementById('tab-content-framework').style.display = 'none';
@@ -302,11 +428,14 @@ class EbmTutorApp {
       document.getElementById('tab-content-framework').style.display = 'block';
     }
   }
+
   switchMobileView(view) {
     document.querySelectorAll('#mobile-tabs li').forEach(li => li.classList.remove('is-active'));
     document.getElementById(`tab-btn-${view}`).classList.add('is-active');
+
     const pdfPane = document.getElementById('pdf-pane');
     const chatPane = document.getElementById('chat-pane');
+
     if (view === 'pdf') {
       pdfPane.classList.remove('is-hidden-mobile');
       chatPane.classList.add('is-hidden-mobile');
@@ -320,38 +449,45 @@ class EbmTutorApp {
       pdfPane.classList.add('is-hidden-mobile');
     }
   }
+
   updateChecklistUI(stepIndex, titleOverride = null, checklist = null) {
     document.getElementById('step-badge').textContent = `Step ${stepIndex} / 7`;
     if (titleOverride) document.getElementById('step-title').textContent = titleOverride;
     document.getElementById('checklist-progress').value = stepIndex;
+
     const stepsList = document.getElementById('framework-steps-list');
     if (!stepsList) return;
-    const steps = checklist || [];
+
+    const steps = checklist || [
+      { index: 0, title: 'Study Design & Directness' },
+      { index: 1, title: 'Random Assignment' },
+      { index: 2, title: 'Allocation Concealment' },
+      { index: 3, title: 'Baseline Characteristics' },
+      { index: 4, title: 'Blinding (Masking)' },
+      { index: 5, title: 'Intention-to-Treat & Follow-up' },
+      { index: 6, title: 'Results Magnitude & Precision' },
+      { index: 7, title: 'Applicability & Final Score' }
+    ];
+
     stepsList.innerHTML = steps.map(s => {
       let icon = '<i class="fa-regular fa-circle mr-2 has-text-grey"></i>';
       if (s.index < stepIndex) icon = '<i class="fa-solid fa-circle-check mr-2 has-text-success"></i>';
       else if (s.index === stepIndex) icon = '<i class="fa-solid fa-circle-play mr-2 has-text-info"></i>';
-      return `<div class="framework-step-card"><div class="is-flex is-align-items-center">${icon}<span class="has-text-weight-bold has-text-white is-size-7">Step ${s.index}: ${s.title}</span></div></div>`;
+
+      return `
+        <div class="framework-step-card">
+          <div class="is-flex is-align-items-center">
+            ${icon}
+            <span class="has-text-weight-bold has-text-white is-size-7">Step ${s.index}: ${s.title}</span>
+          </div>
+        </div>
+      `;
     }).join('');
   }
+
   showCompetencyScorecard(badge) {
     document.getElementById('badge-title').textContent = badge || 'Methodology Detective';
     document.getElementById('modal-scorecard').classList.add('is-active');
-  }
-  filterLibrary(spec) { /* handled in render */ }
-  renderLibrary(papers) {
-    const list = document.getElementById('library-list');
-    if (!list) return;
-    list.innerHTML = papers.map(p => `
-      <div class="column is-6">
-        <div class="box has-background-dark p-4">
-          <span class="tag is-info is-light is-small mb-1">${(p.category_name || p.specialty).toUpperCase()}</span>
-          <h4 class="has-text-white is-size-6 has-text-weight-bold mb-1">${p.title}</h4>
-          <p class="has-text-grey is-size-7 mb-2">${p.citation}</p>
-          <button class="button is-small is-info is-fullwidth mt-3" onclick="app.startLibraryPaperAppraisal('${p.id}')">Appraise This Paper</button>
-        </div>
-      </div>
-    `).join('');
   }
 }
 
