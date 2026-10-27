@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
   <title>Painless EBM - Socratic AI Clinical Appraisal Tutor</title>
   
   <!-- Bulma CSS & FontAwesome -->
@@ -39,16 +39,25 @@
       </div>
       <div class="navbar-end mr-3">
         <div class="navbar-item">
+          <!-- COIN WALLET BADGE -->
+          <div class="tags has-addons mr-3 mb-0">
+            <span class="tag is-warning is-dark"><i class="fa-solid fa-coins mr-1"></i> EBM Coins</span>
+            <span class="tag is-warning" id="user-coin-balance">50</span>
+          </div>
+
+          <!-- BUY COINS BUTTON -->
+          <button class="button is-small is-warning is-light mr-3" onclick="app.openBuyCoinsModal()">
+            <i class="fa-solid fa-plus mr-1"></i> Buy Coins
+          </button>
+
           <button id="btn-open-library" class="button is-small is-info mr-2">
             <i class="fa-solid fa-book-medical mr-1"></i> Practice Library
           </button>
-          <label class="button is-small is-primary is-light mr-2" style="cursor: pointer;">
-            <i class="fa-solid fa-upload mr-1"></i> Upload PDF
+          
+          <label class="button is-small is-primary is-light mr-2" style="cursor: pointer;" title="Cost: 50 EBM Coins">
+            <i class="fa-solid fa-upload mr-1"></i> Upload PDF (-50 🪙)
             <input type="file" id="pdf-file-input" accept="application/pdf" style="display: none;">
           </label>
-          <span class="tag is-rounded is-dark">
-            <i class="fa-solid fa-flask has-text-warning mr-1"></i> Tester Mode
-          </span>
         </div>
       </div>
     </div>
@@ -62,9 +71,14 @@
           <i class="fa-solid fa-file-pdf mr-1"></i> Paper
         </a>
       </li>
+      <li id="tab-btn-framework">
+        <a onclick="app.switchMobileView('framework')">
+          <i class="fa-solid fa-clipboard-list mr-1"></i> Framework
+        </a>
+      </li>
       <li id="tab-btn-chat">
         <a onclick="app.switchMobileView('chat')">
-          <i class="fa-solid fa-comments mr-1"></i> AI Tutor 
+          <i class="fa-solid fa-comments mr-1"></i> Tutor 
           <span id="mobile-chat-badge" class="tag is-info is-rounded ml-1 is-hidden">1</span>
         </a>
       </li>
@@ -74,43 +88,70 @@
   <!-- MAIN SPLIT SCREEN CONTAINER -->
   <div class="main-split-container">
     
-    <!-- LEFT PANE: PDF.js VIEWER -->
+    <!-- LEFT PANE: DUAL-TAB VIEWER (PDF CANVAS / FRAMEWORK CHEAT SHEET) -->
     <section class="split-pane pdf-pane" id="pdf-pane">
-      <div class="pdf-toolbar level is-mobile px-3 py-2">
-        <div class="level-left">
-          <button class="button is-small is-dark" id="pdf-prev" title="Previous Page">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
-          <span class="has-text-grey-light mx-2" style="font-size: 0.85rem;">
-            Page <span id="pdf-page-num" class="has-text-white">1</span> / <span id="pdf-page-count">-</span>
-          </span>
-          <button class="button is-small is-dark" id="pdf-next" title="Next Page">
-            <i class="fa-solid fa-arrow-right"></i>
-          </button>
-        </div>
-        <div class="level-right">
-          <button class="button is-small is-dark" id="pdf-zoom-out" title="Zoom Out">
-            <i class="fa-solid fa-magnifying-glass-minus"></i>
-          </button>
-          <button class="button is-small is-dark" id="pdf-zoom-in" title="Zoom In">
-            <i class="fa-solid fa-magnifying-glass-plus"></i>
-          </button>
-        </div>
-      </div>
       
-      <div class="pdf-canvas-wrapper" id="pdf-canvas-wrapper">
-        <div id="pdf-loading-overlay" class="has-text-centered py-6">
-          <i class="fa-solid fa-book-open fa-2x has-text-info mb-3"></i>
-          <p class="has-text-white has-text-weight-bold">Ready to appraise</p>
-          <p class="is-size-7 has-text-grey-light mt-1">
-            Pick a paper from the <strong>Practice Library</strong> or click <strong>Upload PDF</strong> above.
-          </p>
+      <!-- LEFT PANE TABS (Desktop & Tablet) -->
+      <div class="tabs is-boxed is-small mb-0 px-3 pt-2 has-background-dark" id="left-pane-tabs">
+        <ul>
+          <li id="left-tab-pdf" class="is-active">
+            <a onclick="app.switchLeftTab('pdf')"><i class="fa-solid fa-file-pdf mr-1"></i> Research Paper</a>
+          </li>
+          <li id="left-tab-fw">
+            <a onclick="app.switchLeftTab('framework')"><i class="fa-solid fa-clipboard-list mr-1"></i> Appraisal Framework</a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- TAB CONTENT CONTAINER 1: PDF VIEWER -->
+      <div id="tab-content-pdf" class="is-flex flex-column" style="flex: 1; overflow: hidden;">
+        <div class="pdf-toolbar level is-mobile px-3 py-2">
+          <div class="level-left">
+            <button class="button is-small is-dark" id="pdf-prev" title="Previous Page">
+              <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            <span class="has-text-grey-light mx-2" style="font-size: 0.85rem;">
+              Page <span id="pdf-page-num" class="has-text-white">1</span> / <span id="pdf-page-count">-</span>
+            </span>
+            <button class="button is-small is-dark" id="pdf-next" title="Next Page">
+              <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+          <div class="level-right">
+            <button class="button is-small is-dark" id="pdf-zoom-out" title="Zoom Out">
+              <i class="fa-solid fa-magnifying-glass-minus"></i>
+            </button>
+            <button class="button is-small is-dark" id="pdf-zoom-in" title="Zoom In">
+              <i class="fa-solid fa-magnifying-glass-plus"></i>
+            </button>
+          </div>
         </div>
-        <div id="pdf-page-container" style="display: none;">
-          <canvas id="pdf-canvas"></canvas>
-          <div id="pdf-text-layer" class="textLayer"></div>
+        
+        <div class="pdf-canvas-wrapper" id="pdf-canvas-wrapper">
+          <div id="pdf-loading-overlay" class="has-text-centered py-6">
+            <i class="fa-solid fa-book-open fa-2x has-text-info mb-3"></i>
+            <p class="has-text-white has-text-weight-bold">Ready to appraise</p>
+            <p class="is-size-7 has-text-grey-light mt-1">
+              Pick a paper from the <strong>Practice Library</strong> or click <strong>Upload PDF</strong> above.
+            </p>
+          </div>
+          <div id="pdf-page-container" style="display: none;">
+            <canvas id="pdf-canvas"></canvas>
+            <div id="pdf-text-layer" class="textLayer"></div>
+          </div>
         </div>
       </div>
+
+      <!-- TAB CONTENT CONTAINER 2: APPRAISAL FRAMEWORK CHECKLIST -->
+      <div id="tab-content-framework" class="p-4" style="flex: 1; overflow-y: auto; display: none;">
+        <h3 class="title is-6 has-text-white mb-1" id="fw-category-title">CONSORT / Therapy Framework</h3>
+        <p class="subtitle is-7 has-text-grey-light mb-4" id="fw-category-desc">Systematic validity guidelines for evaluating clinical trial interventions.</p>
+        
+        <div class="timeline-container" id="framework-steps-list">
+          <!-- Dynamically populated checklist steps -->
+        </div>
+      </div>
+
     </section>
 
     <!-- RIGHT PANE: SOCRATIC CHAT INTERFACE -->
@@ -203,6 +244,75 @@
     </div>
   </div>
 
+  <!-- MODAL: CATEGORY DEBATE / CLASSIFICATION -->
+  <div class="modal" id="modal-classification">
+    <div class="modal-background"></div>
+    <div class="modal-card" style="width: 90%; max-width: 650px;">
+      <header class="modal-card-head has-background-dark">
+        <p class="modal-card-title has-text-white is-size-5">
+          <i class="fa-solid fa-compass-drafting has-text-info mr-2"></i>Study Design Classification
+        </p>
+      </header>
+      <section class="modal-card-body has-background-black-bis has-text-white">
+        <p class="is-size-6 mb-3">Our AI pre-scanned your uploaded paper and inferred its research genre:</p>
+        
+        <div class="box has-background-dark p-3 mb-4" id="ai-recommendation-box" style="border: 1px solid #00a3e0;">
+          <span class="tag is-info is-light mb-1">AI Recommended</span>
+          <h4 class="title is-6 has-text-white mb-0" id="suggested-category-name">Drug Treatments & Simple Interventions</h4>
+        </div>
+
+        <p class="is-size-7 has-text-grey mb-3">Select the appropriate appraisal framework below:</p>
+        
+        <div class="buttons" id="category-selection-grid">
+          <!-- 9 Category Buttons populated dynamically -->
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- MODAL: BUY COINS (STRIPE PLACEHOLDER) -->
+  <div class="modal" id="modal-buy-coins">
+    <div class="modal-background" onclick="app.closeBuyCoinsModal()"></div>
+    <div class="modal-card">
+      <header class="modal-card-head has-background-dark">
+        <p class="modal-card-title has-text-white is-size-5">
+          <i class="fa-solid fa-coins has-text-warning mr-2"></i>Get More EBM Coins
+        </p>
+        <button class="delete" aria-label="close" onclick="app.closeBuyCoinsModal()"></button>
+      </header>
+      <section class="modal-card-body has-background-black-bis">
+        <p class="has-text-grey-light is-size-6 mb-4">
+          Coins power the AI Attending Tutor and full-document custom paper ingestion.
+        </p>
+        <div class="columns is-multiline">
+          <div class="column is-6">
+            <div class="box has-background-dark has-text-centered p-4" style="border: 1px solid rgba(255,255,255,0.1);">
+              <h4 class="title is-5 has-text-white mb-1">50 Coins</h4>
+              <p class="has-text-grey is-size-7 mb-3">1 Custom Upload</p>
+              <button class="button is-warning is-small is-fullwidth" onclick="app.simulatePurchase(50, '$1.99')">
+                $1.99 USD
+              </button>
+            </div>
+          </div>
+          <div class="column is-6">
+            <div class="box has-background-dark has-text-centered p-4" style="border: 1px solid #ffd700;">
+              <span class="tag is-warning is-small mb-1">BEST VALUE</span>
+              <h4 class="title is-5 has-text-white mb-1">150 Coins</h4>
+              <p class="has-text-grey is-size-7 mb-3">Full Residency Block</p>
+              <button class="button is-warning is-small is-fullwidth" onclick="app.simulatePurchase(150, '$4.99')">
+                $4.99 USD
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="notification is-dark is-size-7 has-text-grey-light mt-2">
+          <i class="fa-brands fa-stripe fa-lg mr-2 has-text-info"></i>
+          Secure Stripe checkout integration coming in the next release.
+        </div>
+      </section>
+    </div>
+  </div>
+
   <!-- MODAL: FINAL EBM SCORECARD & BADGE -->
   <div class="modal" id="modal-scorecard">
     <div class="modal-background"></div>
@@ -222,7 +332,7 @@
         <div class="box has-background-dark has-text-left p-4 mb-4">
           <p class="is-size-6 has-text-white"><strong>Tutor's Debrief:</strong></p>
           <p class="is-size-7 has-text-grey-light mt-1" id="badge-feedback">
-            You successfully completed the Painless EBM appraisal framework. You evaluated directness, randomization, blinding, and intention-to-treat without relying on surface-level claims.
+            You successfully completed the critical appraisal framework with attending-level precision.
           </p>
         </div>
         <button class="button is-info" onclick="location.reload()">Appraise Another Paper</button>

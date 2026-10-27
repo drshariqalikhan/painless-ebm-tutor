@@ -324,4 +324,22 @@ x), all interactive controls and quick pills must have a minimum touch target of
 
 
 
- 
+ painless-ebm-tutor/
+├── .env                  <-- Local environment variables (git-ignored, never pushed to GitHub)
+├── .gitignore            <-- Ignores .env, .DS_Store, node_modules, etc.
+├── SPECIFICATION.md      <-- Master system specification & research protocol document
+├── vercel.json           <-- Vercel static routing & CORS header configuration
+├── manifest.json         <-- PWA configuration (app name, theme colors, icons)
+├── sw.js                 <-- PWA Service Worker for offline/cached asset loading
+├── index.html            <-- Main application UI (Bulma CSS split-screen layout & modals)
+├── api/
+│   └── config.js         <-- Vercel Serverless function that delivers env keys securely to the browser
+├── css/
+│   └── style.css         <-- Custom dark clinical styling, chat bubbles, and mobile overrides
+├── js/
+│   ├── config.js         <-- Initializes Supabase client using dynamic /api/config response
+│   ├── pdf-viewer.js     <-- Mozilla PDF.js controller (canvas rendering, zoom, and quote highlighting)
+│   └── app.js            <-- Core application logic (Wallet economy, Socratic engine, tabs, and library)
+└── tests/
+    ├── runner.html       <-- Browser test runner page powered by QUnit CDN
+    └── test-state-machine.js <-- Unit & integration tests for frontend state, pills, and device IDs

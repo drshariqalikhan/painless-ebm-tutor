@@ -1,0 +1,10 @@
+// api/config.js
+export default function handler(request, response) {
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  
+  response.status(200).json({
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    EDGE_FUNCTION_NAME: process.env.EDGE_FUNCTION_NAME || 'ebm-tutor'
+  });
+}

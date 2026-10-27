@@ -1,15 +1,18 @@
 {
   "name": "Painless EBM AI Tutor",
   "short_name": "EBM Tutor",
+  "description": "An interactive Socratic AI tutor that teaches systematic critical appraisal of medical research papers.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0e17",
   "theme_color": "#007acc",
+  "orientation": "any",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3209/3209265.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

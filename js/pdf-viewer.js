@@ -1,4 +1,4 @@
-// Configure PDF.js Worker
+// Configure official Mozilla PDF.js Worker via CDN
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 class PDFViewerController {
@@ -22,27 +22,44 @@ class PDFViewerController {
     document.getElementById('pdf-zoom-out').addEventListener('click', () => this.zoom(-0.15));
   }
 
+  // Load PDF from a public URL or local object URL
   async loadPDF(url) {
     document.getElementById('pdf-loading-overlay').style.display = 'block';
     this.pageContainer.style.display = 'none';
 
     try {
-      this.pdfDoc = await pdfjsLib.getDocument(url).promise;
+      const loadingTask = pdfjsLib.getDocument(url);
+      this.pdfDoc = await loadingTask.promise;
+
       document.getElementById('pdf-page-count').textContent = this.pdfDoc.numPages;
       document.getElementById('pdf-loading-overlay').style.display = 'none';
       this.pageContainer.style.display = 'block';
+
       this.pageNum = 1;
       await this.renderPage(this.pageNum);
     } catch (err) {
-      console.error('Error loading PDF:', err);
-      alert('Could not render PDF. Ensure CORS is enabled on Supabase storage.');
+      console.error('Error loading PDF document:', err);
+      alert('Could not render PDF. Ensure CORS rules allow fetching this document.');
     }
   }
 
+  // Render specific page with mobile auto-scaling
   async renderPage(num) {
     if (!this.pdfDoc) return;
+
     const page = await this.pdfDoc.getPage(num);
-    const viewport = page.getViewport({ scale: this.scale });
+
+    // Dynamic Mobile Optimization: Fit-to-width on small screens (<= 768px)
+    let currentScale = this.scale;
+    const unscaledViewport = page.getViewport({ scale: 1.0 });
+    
+    if (window.innerWidth <= 768) {
+      // Account for padding wrapper (~30px total)
+      const availableWidth = window.innerWidth - 30;
+      currentScale = availableWidth / unscaledViewport.width;
+    }
+
+    const viewport = page.getViewport({ scale: currentScale });
 
     this.canvas.height = viewport.height;
     this.canvas.width = viewport.width;
@@ -54,18 +71,24 @@ class PDFViewerController {
 
     await page.render(renderContext).promise;
 
-    // Render Text Layer for search/selection
-    this.textLayerDiv.innerHTML = '';
-    this.textLayerDiv.style.height = `${viewport.height}px`;
-    this.textLayerDiv.style.width = `${viewport.width}px`;
+    // Build PDF text layer for text selection & highlighting
+    if (this.textLayerDiv) {
+      this.textLayerDiv.innerHTML = '';
+      this.textLayerDiv.style.height = `${viewport.height}px`;
+      this.textLayerDiv.style.width = `${viewport.width}px`;
 
-    const textContent = await page.getTextContent();
-    pdfjsLib.renderTextLayer({
-      textContent: textContent,
-      container: this.textLayerDiv,
-      viewport: viewport,
-      textDivs: []
-    });
+      try {
+        const textContent = await page.getTextContent();
+        pdfjsLib.renderTextLayer({
+          textContent: textContent,
+          container: this.textLayerDiv,
+          viewport: viewport,
+          textDivs: []
+        });
+      } catch (textErr) {
+        console.warn('Text layer rendering skipped:', textErr);
+      }
+    }
 
     document.getElementById('pdf-page-num').textContent = num;
   }
@@ -76,20 +99,45 @@ class PDFViewerController {
     if (newPage >= 1 && newPage <= this.pdfDoc.numPages) {
       this.pageNum = newPage;
       this.renderPage(this.pageNum);
+      this.canvasWrapper.scrollTop = 0;
     }
   }
 
   zoom(delta) {
+    if (window.innerWidth <= 768) return; // Lock fixed fit-to-width on mobile
     this.scale = Math.min(Math.max(0.7, this.scale + delta), 2.2);
     this.renderPage(this.pageNum);
   }
 
-  // Jumps to page cited by AI Tutor and scrolls into view
+  // Bridge Method: Jump to cited page and highlight matching text
   async jumpToPageAndHighlight(pageNumber, quote) {
-    if (!this.pdfDoc || pageNumber < 1 || pageNumber > this.pdfDoc.numPages) return;
-    this.pageNum = pageNumber;
-    await this.renderPage(this.pageNum);
-    this.canvasWrapper.scrollTop = 0;
+    if (!this.pdfDoc) return;
+    
+    if (pageNumber >= 1 && pageNumber <= this.pdfDoc.numPages) {
+      this.pageNum = pageNumber;
+      await this.renderPage(this.pageNum);
+      this.canvasWrapper.scrollTop = 0;
+    }
+
+    // Attempt to highlight text in the rendered text layer
+    if (quote && this.textLayerDiv) {
+      setTimeout(() => {
+        const query = quote.toLowerCase().trim().substring(0, 30); // match first 30 chars
+        const textSpans = this.textLayerDiv.querySelectorAll('span');
+        
+        let foundFirst = false;
+        textSpans.forEach(span => {
+          const text = span.textContent.toLowerCase();
+          if (text.includes(query) || query.includes(text)) {
+            span.classList.add('highlight');
+            if (!foundFirst) {
+              span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              foundFirst = true;
+            }
+          }
+        });
+      }, 400); // 400ms delay to allow text layer DOM paint
+    }
   }
 }
 

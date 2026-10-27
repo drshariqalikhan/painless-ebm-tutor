@@ -20,7 +20,7 @@ body, html {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Split screen layout */
+/* Main Split Screen Layout (Desktop) */
 .main-split-container {
   display: flex;
   height: calc(100vh - 3.25rem);
@@ -36,17 +36,64 @@ body, html {
 }
 
 .pdf-pane {
-  flex: 1.2;
+  flex: 1.25;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   background-color: #1a1e29;
 }
 
 .chat-pane {
-  flex: 0.9;
+  flex: 0.95;
   background-color: var(--surface-dark);
 }
 
-/* PDF Viewer controls & canvas */
+/* Left Pane Tab styling */
+#left-pane-tabs {
+  background-color: var(--surface-header) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 0 !important;
+}
+
+#left-pane-tabs ul {
+  border-bottom: none !important;
+  padding-left: 12px;
+}
+
+#left-pane-tabs li a {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background-color: #131b26 !important;
+  color: #a0aec0 !important;
+  font-size: 0.8rem;
+}
+
+#left-pane-tabs li.is-active a {
+  background-color: #1a1e29 !important;
+  border-bottom-color: #1a1e29 !important;
+  color: var(--accent-blue) !important;
+  font-weight: bold;
+}
+
+/* Framework Checklist Timeline Styling */
+.framework-step-card {
+  background-color: #131b26;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+}
+
+.framework-step-card.is-active-step {
+  border-color: var(--accent-blue);
+  background-color: #172435;
+  box-shadow: 0 0 12px rgba(0, 163, 224, 0.15);
+}
+
+.framework-step-card.is-completed-step {
+  opacity: 0.7;
+  border-color: rgba(0, 163, 224, 0.3);
+}
+
+/* PDF Viewer controls & canvas wrapper */
 .pdf-toolbar {
   background-color: var(--surface-header);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -69,9 +116,11 @@ body, html {
 
 #pdf-canvas {
   display: block;
+  max-width: 100%;
+  height: auto !important;
 }
 
-/* Text layer for selection and highlighting */
+/* PDF.js Text layer for selection and highlighting */
 .textLayer {
   position: absolute;
   left: 0;
@@ -81,6 +130,7 @@ body, html {
   overflow: hidden;
   opacity: 0.25;
   line-height: 1.0;
+  pointer-events: none;
 }
 
 .textLayer span {
@@ -92,12 +142,12 @@ body, html {
 }
 
 .textLayer .highlight {
-  background-color: yellow !important;
+  background-color: #ffd700 !important;
   opacity: 0.6;
   border-radius: 2px;
 }
 
-/* Chat container */
+/* Chat container & messages feed */
 .chat-header {
   background-color: var(--surface-header);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -113,7 +163,7 @@ body, html {
 
 /* Chat bubbles */
 .chat-bubble {
-  max-width: 88%;
+  max-width: 90%;
   padding: 12px 16px;
   border-radius: 12px;
   font-size: 0.9rem;
@@ -133,15 +183,16 @@ body, html {
   color: #ffffff;
 }
 
-/* Evidence callout in chat */
+/* Evidence citation card inside chat */
 .evidence-card {
-  background-color: rgba(0, 0, 0, 0.35);
+  background-color: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(0, 163, 224, 0.4);
   border-radius: 8px;
   padding: 10px;
   margin-top: 8px;
 }
 
+/* Bottom input bar & quick action pills */
 .chat-input-bar {
   background-color: var(--surface-header);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -152,19 +203,58 @@ body, html {
   gap: 6px;
   overflow-x: auto;
   padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Responsive mobile view */
+.quick-pills::-webkit-scrollbar {
+  height: 3px;
+}
+
+.quick-pills::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+/* Custom Scrollbars for panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Responsive Mobile Breakpoint (<= 768px) */
 @media screen and (max-width: 768px) {
   .main-split-container {
-    height: calc(100vh - 5.5rem);
-    margin-top: 5.5rem;
+    height: calc(100vh - 5.75rem);
+    margin-top: 5.75rem;
   }
+  
   .split-pane {
-    flex: 1;
+    flex: 1 !important;
     width: 100vw;
   }
-  .pdf-pane.is-hidden-mobile, .chat-pane.is-hidden-mobile {
+
+  /* Hide unselected panes on mobile */
+  .pdf-pane.is-hidden-mobile, 
+  .chat-pane.is-hidden-mobile {
     display: none !important;
+  }
+
+  /* Make tab toggle compact */
+  #mobile-tabs {
+    background-color: var(--surface-dark);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 }
